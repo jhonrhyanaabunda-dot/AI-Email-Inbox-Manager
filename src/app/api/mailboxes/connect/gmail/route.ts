@@ -6,6 +6,8 @@ import { fail, toErrorResponse } from "@/lib/api";
 import { redis } from "@/lib/redis";
 import { gmailAuthUrl } from "@/lib/sync/gmail";
 
+export const dynamic = "force-dynamic";
+
 // Begin OAuth: persist a short-lived state token (5 min) in Redis keyed to the user.
 export async function GET(_req: NextRequest) {
   try {

@@ -4,6 +4,8 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { queues } from "@/lib/queue";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Microsoft Graph notification endpoint.
  * - GET / POST with `?validationToken=...` is the subscription handshake;

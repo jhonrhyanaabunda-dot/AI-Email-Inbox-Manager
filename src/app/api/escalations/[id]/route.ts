@@ -6,6 +6,8 @@ import { can } from "@/lib/permissions";
 import { fail, ok, toErrorResponse } from "@/lib/api";
 import { audit } from "@/lib/audit";
 
+export const dynamic = "force-dynamic";
+
 const Patch = z.object({
   status: z.enum(["OPEN", "ACKNOWLEDGED", "IN_PROGRESS", "RESOLVED", "DISMISSED"]),
   resolutionNotes: z.string().optional(),

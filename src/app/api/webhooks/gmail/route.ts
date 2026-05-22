@@ -4,6 +4,8 @@ import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import { queues } from "@/lib/queue";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Google Pub/Sub push endpoint. Pub/Sub posts the message base64-encoded
  * under `message.data` with `{ emailAddress, historyId }`.

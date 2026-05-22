@@ -5,6 +5,8 @@ import { can } from "@/lib/permissions";
 import { fail, ok, toErrorResponse } from "@/lib/api";
 import { isDemoMode, cannedDraft, cannedSummary } from "@/lib/demo-mode";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

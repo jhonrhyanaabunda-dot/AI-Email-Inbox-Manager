@@ -4,6 +4,8 @@ import { can } from "@/lib/permissions";
 import { fail, ok, toErrorResponse } from "@/lib/api";
 import { subDays, startOfDay } from "date-fns";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const session = await requireSession();

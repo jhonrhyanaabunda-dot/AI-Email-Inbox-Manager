@@ -3,6 +3,8 @@ import { requireSession } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { fail, ok, toErrorResponse } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const session = await requireSession();

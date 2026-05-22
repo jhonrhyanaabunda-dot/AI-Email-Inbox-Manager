@@ -9,6 +9,8 @@ import { queues } from "@/lib/queue";
 import { env } from "@/lib/env";
 import { toErrorResponse } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const code = req.nextUrl.searchParams.get("code");

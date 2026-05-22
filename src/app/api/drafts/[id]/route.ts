@@ -7,6 +7,8 @@ import { fail, ok, toErrorResponse } from "@/lib/api";
 import { audit } from "@/lib/audit";
 import { isDemoMode } from "@/lib/demo-mode";
 
+export const dynamic = "force-dynamic";
+
 const Patch = z.object({
   bodyText: z.string().optional(),
   subject: z.string().optional(),

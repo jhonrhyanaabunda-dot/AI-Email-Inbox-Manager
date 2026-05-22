@@ -3,6 +3,8 @@ import { requireSession } from "@/lib/tenant";
 import { ok, toErrorResponse } from "@/lib/api";
 import { isDemoMode, cannedDigest } from "@/lib/demo-mode";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const session = await requireSession();

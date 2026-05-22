@@ -6,6 +6,8 @@ import { fail, toErrorResponse } from "@/lib/api";
 import { redis } from "@/lib/redis";
 import { microsoftAuthUrl } from "@/lib/sync/microsoft";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(_req: NextRequest) {
   try {
     const session = await requireSession();

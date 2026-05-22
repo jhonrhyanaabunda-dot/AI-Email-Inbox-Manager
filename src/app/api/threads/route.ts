@@ -5,6 +5,8 @@ import { requireSession } from "@/lib/tenant";
 import { can } from "@/lib/permissions";
 import { ok, toErrorResponse } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 const Query = z.object({
   status: z.enum(["INBOX", "SNOOZED", "ARCHIVED", "DONE", "SPAM", "TRASH"]).default("INBOX"),
   priority: z.enum(["CRITICAL", "HIGH", "NORMAL", "LOW"]).optional(),

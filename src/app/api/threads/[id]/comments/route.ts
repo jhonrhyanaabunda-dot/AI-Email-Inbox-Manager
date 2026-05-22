@@ -6,6 +6,8 @@ import { can } from "@/lib/permissions";
 import { fail, ok, toErrorResponse } from "@/lib/api";
 import { audit } from "@/lib/audit";
 
+export const dynamic = "force-dynamic";
+
 const Body = z.object({ body: z.string().min(1).max(4000) });
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
