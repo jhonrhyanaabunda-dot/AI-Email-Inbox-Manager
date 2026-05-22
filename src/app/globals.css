@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* A3 Brands design system — emerald + charcoal foundation.
+   Values mapped from DESIGN.md (see /docs/A3-DESIGN.md mirror). */
+
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: 0 0% 100%;                /* #FFFFFF */
+    --foreground: 215 11% 20%;              /* #2C3038 Deep Charcoal */
+    --card: 0 0% 100%;
+    --card-foreground: 215 11% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 11% 20%;
+
+    /* Brand */
+    --primary: 141 73% 42%;                 /* #1DB954 A3 Emerald */
+    --primary-foreground: 215 11% 20%;      /* charcoal on emerald, per spec */
+
+    /* Neutrals */
+    --secondary: 210 17% 98%;               /* #F8F9FA */
+    --secondary-foreground: 215 11% 20%;
+    --muted: 220 11% 95%;                   /* #F0F1F3 */
+    --muted-foreground: 217 11% 40%;        /* #5A6170 Stone Gray */
+    --accent: 141 73% 96%;                  /* emerald-tint surface */
+    --accent-foreground: 141 73% 22%;       /* deep emerald text */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;                  /* #E5E7EB */
+    --input: 220 13% 91%;
+    --ring: 141 73% 42%;                    /* emerald focus ring */
+
+    /* Component shape — A3 uses 16px on cards but 50px (pill) on primary CTAs */
+    --radius: 1rem;                         /* 16px */
+    --radius-pill: 50px;
+    --radius-input: 0.5rem;                 /* 8px */
+    --radius-badge: 0.25rem;                /* 4px */
+
+    /* Shadows */
+    --shadow-emerald: 0 4px 24px 0 rgba(29, 185, 84, 0.3);
+    --shadow-emerald-strong: 0 6px 28px 0 rgba(29, 185, 84, 0.4);
+    --shadow-subtle: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+    --shadow-raised: 0 8px 24px 0 rgba(0, 0, 0, 0.12);
+    --shadow-elevated: 0 4px 30px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .dark {
+    /* The A3 hero treatment — Dark Navy #0B0D0F with emerald accents. */
+    --background: 220 14% 5%;               /* #0B0D0F */
+    --foreground: 0 0% 100%;
+    --card: 215 14% 9%;                     /* slightly lifted from bg */
+    --card-foreground: 0 0% 100%;
+    --popover: 215 14% 9%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 141 73% 46%;                 /* slightly brighter emerald in dark */
+    --primary-foreground: 215 11% 12%;
+
+    --secondary: 215 14% 13%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 215 14% 15%;
+    --muted-foreground: 218 9% 65%;
+    --accent: 141 50% 14%;
+    --accent-foreground: 141 73% 70%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 14% 18%;
+    --input: 215 14% 18%;
+    --ring: 141 73% 46%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01" 1, "cv11" 1;
+    /* A3 body copy spec: 12px / 17px / 0.02em.
+       Keeping 13px as the practical SaaS minimum for inbox density;
+       marketing surfaces (login, briefing summary) drop to 12px. */
+    font-size: 13px;
+    line-height: 18px;
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 800;
+    letter-spacing: -0.005em;
+  }
+  h1 { font-size: 51px; line-height: 56px; letter-spacing: 0.02em; font-weight: 800; }
+  h2 { font-size: 35px; line-height: 39px; letter-spacing: 0.015em; font-weight: 800; }
+  h3 { font-size: 28px; line-height: 33px; letter-spacing: 0.01em; font-weight: 700; }
+}
+
+@layer components {
+  .a3-label {
+    @apply text-[10px] font-bold uppercase;
+    letter-spacing: 0.05em;
+    line-height: 14px;
+  }
+  .a3-shadow-cta {
+    box-shadow: var(--shadow-emerald);
+  }
+  .a3-shadow-subtle {
+    box-shadow: var(--shadow-subtle);
+  }
+
+  /* Scrollbars — keep them quiet, brand-coherent. */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+  }
+}

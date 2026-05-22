@@ -1,0 +1,20 @@
+node_modules
+.next
+out
+build
+dist
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+coverage
+tsconfig.tsbuildinfo
+.turbo
+.vercel
+.idea
+.vscode
+# SQLite dev databases (production uses Postgres — never commit local data)
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/dev.db*

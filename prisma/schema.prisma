@@ -1,0 +1,566 @@
+// AI Email Inbox Manager — SQLite dev schema (zero-install).
+// Production schema (in docs/) targets Postgres with real enums + @db.Text.
+// Here, enum types are simulated as strings; allowed values are listed in comments.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Tenancy & Identity ──────────────────────────────────────────────────────
+// Role: SUPER_ADMIN | AGENCY_ADMIN | DEALER_PRINCIPAL | GM | MARKETING_DIRECTOR | FIXED_OPS_DIRECTOR | ASSISTANT | READ_ONLY
+// OrgPlan: TRIAL | STARTER | GROWTH | ENTERPRISE
+
+model Organization {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String     @unique
+  plan         String     @default("TRIAL")
+  isAgency     Boolean    @default(false)
+  parentOrgId  String?
+  parentOrg    Organization?  @relation("AgencyHierarchy", fields: [parentOrgId], references: [id])
+  childOrgs    Organization[] @relation("AgencyHierarchy")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  users            User[]
+  memberships      Membership[]
+  dealerships      Dealership[]
+  mailboxes        Mailbox[]
+  threads          EmailThread[]
+  emails           Email[]
+  drafts           AiDraft[]
+  escalations      Escalation[]
+  labels           Label[]
+  activityLogs     ActivityLog[]
+  workflows        Workflow[]
+  apiTokens        ApiToken[]
+  syncJobs         SyncJob[]
+  briefings        DailyBriefing[]
+  vipContacts      VipContact[]
+  vendorPatterns   VendorPattern[]
+
+  @@index([parentOrgId])
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  image           String?
+  hashedPassword  String?
+  emailVerified   DateTime?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role            String   @default("READ_ONLY")
+  timezone        String   @default("America/New_York")
+  lastSeenAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  memberships     Membership[]
+  mailboxes       Mailbox[]        @relation("MailboxOwner")
+  assignedThreads ThreadAssignment[]
+  comments        ThreadComment[]
+  draftsReviewed  AiDraft[]        @relation("DraftReviewer")
+  activityLogs    ActivityLog[]
+  briefings       DailyBriefing[]
+
+  @@index([organizationId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Dealership {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  brand          String?
+  location       String?
+  oemContacts    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  mailboxes      Mailbox[]
+  memberships    Membership[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model Membership {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dealershipId    String?
+  dealership      Dealership?  @relation(fields: [dealershipId], references: [id], onDelete: SetNull)
+  role            String
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, organizationId, dealershipId])
+  @@index([organizationId])
+  @@index([dealershipId])
+}
+
+// ─── Mailboxes & Provider Connections ────────────────────────────────────────
+// MailboxProvider: GMAIL | MICROSOFT
+// MailboxStatus: CONNECTING | ACTIVE | PAUSED | ERROR | DISCONNECTED
+
+model Mailbox {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dealershipId        String?
+  dealership          Dealership?  @relation(fields: [dealershipId], references: [id], onDelete: SetNull)
+  ownerUserId         String?
+  owner               User?        @relation("MailboxOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  provider            String
+  emailAddress        String
+  displayName         String?
+  status              String   @default("CONNECTING")
+  statusReason        String?
+
+  accessTokenEnc      String?
+  refreshTokenEnc     String?
+  tokenExpiresAt      DateTime?
+  scope               String?
+
+  historyCursor       String?
+  subscriptionId      String?
+  subscriptionExpiresAt DateTime?
+
+  lastSyncedAt        DateTime?
+  fullSyncCompletedAt DateTime?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  threads             EmailThread[]
+  emails              Email[]
+  syncJobs            SyncJob[]
+
+  @@unique([organizationId, provider, emailAddress])
+  @@index([organizationId])
+  @@index([status])
+}
+
+// ─── Threads, Emails, Attachments ────────────────────────────────────────────
+// ThreadStatus: INBOX | SNOOZED | ARCHIVED | DONE | SPAM | TRASH
+// Priority: CRITICAL | HIGH | NORMAL | LOW
+// Category: CUSTOMER_INQUIRY | CUSTOMER_COMPLAINT | SALES_LEAD | SERVICE_REQUEST |
+//   OEM_COMMUNICATION | VENDOR | INTERNAL | LEGAL | HR | FINANCE | MARKETING |
+//   RECRUITING | SPAM | NEWSLETTER | OTHER
+// Sentiment: VERY_POSITIVE | POSITIVE | NEUTRAL | NEGATIVE | VERY_NEGATIVE
+
+model EmailThread {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailboxId       String
+  mailbox         Mailbox      @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+
+  providerThreadId String
+  subject         String?
+  snippet         String?
+
+  status          String   @default("INBOX")
+  isRead          Boolean  @default(false)
+  isStarred       Boolean  @default(false)
+  isImportant     Boolean  @default(false)
+
+  category        String?
+  priority        String?
+  priorityScore   Float?
+  sentiment       String?
+  aiSummary       String?
+  aiActionItems   String?
+  aiNextSteps     String?
+  aiTopic         String?
+  vipScore        Float?
+  isVip           Boolean  @default(false)
+  isVendor        Boolean  @default(false)
+
+  snoozedUntil    DateTime?
+  followUpAt      DateTime?
+
+  participants    String
+  lastMessageAt   DateTime
+  firstMessageAt  DateTime
+  messageCount    Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  emails          Email[]
+  drafts          AiDraft[]
+  escalations     Escalation[]
+  labels          ThreadLabel[]
+  assignments     ThreadAssignment[]
+  comments        ThreadComment[]
+
+  @@unique([mailboxId, providerThreadId])
+  @@index([organizationId, status, lastMessageAt])
+  @@index([organizationId, priority, lastMessageAt])
+  @@index([organizationId, category])
+  @@index([snoozedUntil])
+  @@index([followUpAt])
+}
+
+// EmailDirection: INBOUND | OUTBOUND
+
+model Email {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailboxId       String
+  mailbox         Mailbox      @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  threadId        String
+  thread          EmailThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  providerMessageId String
+  providerThreadId  String
+  internetMessageId String?
+
+  direction       String
+  fromEmail       String
+  fromName        String?
+  toEmails        String
+  ccEmails        String?
+  bccEmails       String?
+  replyToEmails   String?
+
+  subject         String?
+  snippet         String?
+  bodyText        String?
+  bodyHtml        String?
+
+  receivedAt      DateTime
+  rawHeaders      String?
+
+  isRead          Boolean  @default(false)
+  hasAttachments  Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+
+  attachments     Attachment[]
+
+  @@unique([mailboxId, providerMessageId])
+  @@index([organizationId, receivedAt])
+  @@index([threadId, receivedAt])
+}
+
+model Attachment {
+  id              String   @id @default(cuid())
+  emailId         String
+  email           Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  providerAttachmentId String?
+  filename        String
+  mimeType        String
+  sizeBytes       Int
+  storageKey      String?
+  inline          Boolean  @default(false)
+  contentId       String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([emailId])
+}
+
+model Label {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  color           String?
+  isSystem        Boolean  @default(false)
+  isAi            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  threads         ThreadLabel[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model ThreadLabel {
+  threadId  String
+  labelId   String
+  thread    EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  label     Label       @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  appliedAt DateTime @default(now())
+  appliedBy String?
+
+  @@id([threadId, labelId])
+  @@index([labelId])
+}
+
+// DraftStatus: PENDING_REVIEW | APPROVED | SENT | REJECTED | EDITED | STALE
+
+model AiDraft {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threadId        String
+  thread          EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  status          String   @default("PENDING_REVIEW")
+  subject         String?
+  bodyText        String
+  bodyHtml        String?
+  toEmails        String
+  ccEmails        String?
+
+  modelUsed       String
+  promptVersion   String
+  confidence      Float?
+  rationale       String?
+  tone            String?
+
+  reviewedById    String?
+  reviewedBy      User?    @relation("DraftReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  reviewNotes     String?
+
+  sentAt          DateTime?
+  sentMessageId   String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([threadId])
+}
+
+// EscalationKind: LEGAL_THREAT | ANGRY_CUSTOMER | HR_COMPLAINT | LAWSUIT | COMPLIANCE | OEM_RISK | FRAUD_INDICATOR | CHURN_RISK | REGULATORY | EXECUTIVE_REQUEST
+// EscalationStatus: OPEN | ACKNOWLEDGED | IN_PROGRESS | RESOLVED | DISMISSED
+
+model Escalation {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threadId        String
+  thread          EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  kind            String
+  status          String   @default("OPEN")
+  riskScore       Float
+  summary         String
+  signals         String
+  recommendedActions String
+  routedTo        String?
+  modelUsed       String
+  promptVersion   String
+
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  resolutionNotes String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, status, riskScore])
+  @@index([threadId])
+}
+
+model ThreadAssignment {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  @@unique([threadId, userId])
+  @@index([userId])
+}
+
+model ThreadComment {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([threadId])
+}
+
+model VipContact {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email           String
+  name            String?
+  reason          String?
+  weight          Float    @default(1.0)
+  createdAt       DateTime @default(now())
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+model VendorPattern {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pattern         String
+  isRegex         Boolean  @default(false)
+  label           String?
+  autoArchive     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId])
+}
+
+model Workflow {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  isEnabled       Boolean  @default(true)
+  trigger         String
+  conditions      String
+  actions         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, isEnabled])
+}
+
+model DailyBriefing {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forDate         DateTime
+
+  summary         String
+  topThreads      String
+  openEscalations Int      @default(0)
+  newLeads        Int      @default(0)
+  pendingDrafts   Int      @default(0)
+  metrics         String
+  modelUsed       String
+
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, forDate])
+  @@index([organizationId, forDate])
+}
+
+// SyncJobKind: HISTORICAL | INCREMENTAL | WEBHOOK | RENEW_SUBSCRIPTION
+// SyncJobStatus: QUEUED | RUNNING | COMPLETED | FAILED | RETRYING
+
+model SyncJob {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailboxId       String
+  mailbox         Mailbox      @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  kind            String
+  status          String   @default("QUEUED")
+  cursor          String?
+  payload         String?
+  processedCount  Int      @default(0)
+  errorMessage    String?
+  attempt         Int      @default(0)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([mailboxId, kind, status])
+}
+
+model ApiToken {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name            String
+  tokenHash       String   @unique
+  prefix          String
+  scopes          String
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+  createdBy       String?
+
+  @@index([organizationId])
+}
+
+// ActivityKind: AUTH_LOGIN | AUTH_LOGOUT | MAILBOX_CONNECT | MAILBOX_DISCONNECT |
+//   THREAD_VIEW | THREAD_ASSIGN | THREAD_COMMENT | THREAD_LABEL | THREAD_ARCHIVE |
+//   THREAD_SNOOZE | DRAFT_CREATED | DRAFT_APPROVED | DRAFT_REJECTED | DRAFT_SENT |
+//   ESCALATION_CREATED | ESCALATION_ACKED | ESCALATION_RESOLVED | WORKFLOW_TRIGGERED |
+//   SETTINGS_CHANGED | USER_INVITED | USER_ROLE_CHANGED | API_TOKEN_CREATED | API_TOKEN_REVOKED
+
+model ActivityLog {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind            String
+  targetType      String?
+  targetId        String?
+  meta            String?
+  ip              String?
+  userAgent       String?
+  createdAt       DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, kind, createdAt])
+}
