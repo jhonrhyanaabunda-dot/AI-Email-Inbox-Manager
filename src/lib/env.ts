@@ -25,7 +25,9 @@ const Env = z.object({
   DATABASE_URL: z.string().default("file:./dev.db"),
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
-  AUTH_SECRET: z.string().default("build-time-placeholder-replace-in-production"),
+  // Default is a baked-in demo secret so the Vercel demo works without any env
+  // vars. Production deployments MUST override this with `openssl rand -base64 32`.
+  AUTH_SECRET: z.string().default("a3-inbox-demo-secret-9k2j4n8p3m5w7q1y6r0t8v4x2z9c7b5n3l1f0g8h"),
   AUTH_TRUST_HOST: z.string().optional(),
 
   ENCRYPTION_KEY: z
