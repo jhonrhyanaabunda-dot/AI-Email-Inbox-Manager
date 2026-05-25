@@ -1,4 +1,5 @@
 import { END, START, StateGraph, Annotation } from "@langchain/langgraph";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { logger } from "../logger";
 import { MODEL } from "../openai";
@@ -156,7 +157,7 @@ async function persistResult(threadId: string, organizationId: string, r: Orches
         priorityScore: r.priority?.score,
         sentiment: r.sentiment?.sentiment,
         aiSummary: r.summary?.summary,
-        aiActionItems: toJsonColumn(r.summary?.actionItems),
+        aiActionItems: toJsonColumn(r.summary?.actionItems) as Prisma.InputJsonValue | undefined,
         aiNextSteps: r.summary?.nextSteps,
         aiTopic: r.category?.topic,
       },
@@ -170,8 +171,8 @@ async function persistResult(threadId: string, organizationId: string, r: Orches
           kind: r.legal.kind ?? "ANGRY_CUSTOMER",
           riskScore: r.legal.riskScore,
           summary: r.legal.summary,
-          signals: toJsonColumn(r.legal.signals) ?? "[]",
-          recommendedActions: toJsonColumn(r.legal.recommendedActions) ?? "[]",
+          signals: r.legal.signals as unknown as Prisma.InputJsonValue,
+          recommendedActions: r.legal.recommendedActions as unknown as Prisma.InputJsonValue,
           modelUsed: MODEL.heavy(),
           promptVersion: PROMPT_VERSIONS.legal,
         },
@@ -196,8 +197,8 @@ async function persistResult(threadId: string, organizationId: string, r: Orches
           status: "PENDING_REVIEW",
           subject: r.draft.subject,
           bodyText: r.draft.bodyText,
-          toEmails: toJsonColumn([latestEmail?.fromEmail].filter(Boolean)) ?? "[]",
-          ccEmails: latestEmail?.ccEmails ?? undefined,
+          toEmails: ([latestEmail?.fromEmail].filter(Boolean) as string[]) as Prisma.InputJsonValue,
+          ccEmails: (latestEmail?.ccEmails ?? undefined) as Prisma.InputJsonValue | undefined,
           modelUsed: MODEL.fast(),
           promptVersion: PROMPT_VERSIONS.draft,
           confidence: r.draft.confidence,
@@ -213,7 +214,7 @@ async function persistResult(threadId: string, organizationId: string, r: Orches
         kind: "WORKFLOW_TRIGGERED",
         targetType: "thread",
         targetId: threadId,
-        meta: toJsonColumn({ agent: "orchestrator", trace: r.trace }),
+        meta: toJsonColumn({ agent: "orchestrator", trace: r.trace }) as Prisma.InputJsonValue | undefined,
       },
     });
   });

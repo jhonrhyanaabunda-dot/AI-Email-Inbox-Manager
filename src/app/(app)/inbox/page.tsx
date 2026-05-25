@@ -1,44 +1,73 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ThreadList } from "@/components/inbox/thread-list";
+import { InboxTabs, type InboxView } from "@/components/inbox/inbox-tabs";
+import { SmartArchiveBanner } from "@/components/inbox/smart-archive-banner";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function InboxIndex() {
+const VALID: InboxView[] = ["INBOX", "SNOOZED", "DONE", "ARCHIVED"];
+
+export default async function InboxIndex({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const threads = await prisma.emailThread.findMany({
-    where: { organizationId: session.user.organizationId, status: "INBOX" },
-    orderBy: [{ priorityScore: "desc" }, { lastMessageAt: "desc" }],
-    take: 50,
-    select: {
-      id: true,
-      subject: true,
-      snippet: true,
-      priority: true,
-      priorityScore: true,
-      category: true,
-      sentiment: true,
-      isVip: true,
-      isRead: true,
-      lastMessageAt: true,
-      messageCount: true,
-      participants: true,
-      aiSummary: true,
-    },
-  });
+  const params = await searchParams;
+  const view: InboxView = VALID.includes(params.view as InboxView) ? (params.view as InboxView) : "INBOX";
+  const orgWhere = { organizationId: session.user.organizationId };
+
+  const [counts, threads, archivableCount] = await Promise.all([
+    Promise.all(VALID.map((v) => prisma.emailThread.count({ where: { ...orgWhere, status: v } }))).then((arr) =>
+      Object.fromEntries(VALID.map((v, i) => [v, arr[i]])) as Record<InboxView, number>
+    ),
+    prisma.emailThread.findMany({
+      where: { ...orgWhere, status: view },
+      orderBy: [{ priorityScore: "desc" }, { lastMessageAt: "desc" }],
+      take: 50,
+      select: {
+        id: true,
+        subject: true,
+        snippet: true,
+        priority: true,
+        priorityScore: true,
+        category: true,
+        sentiment: true,
+        isVip: true,
+        isRead: true,
+        lastMessageAt: true,
+        messageCount: true,
+        participants: true,
+        aiSummary: true,
+        snoozedUntil: true,
+        labels: { include: { label: { select: { name: true } } } },
+      },
+    }),
+    // Archivable: vendor + low-priority unread threads in inbox
+    prisma.emailThread.count({
+      where: { ...orgWhere, status: "INBOX", isVendor: true, priority: { in: ["LOW", "NORMAL"] } },
+    }),
+  ]);
 
   return (
     <div className="grid h-full grid-cols-[400px_1fr]">
-      <aside className="overflow-y-auto border-r scrollbar-thin">
-        <ThreadList
-          threads={threads.map((t) => ({
-            ...t,
-            lastMessageAt: t.lastMessageAt.toISOString(),
-          }))}
-        />
+      <aside className="flex flex-col overflow-hidden border-r border-border">
+        <InboxTabs counts={counts} />
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {view === "INBOX" && archivableCount > 0 && <SmartArchiveBanner count={archivableCount} />}
+          <ThreadList
+            threads={threads.map((t) => ({
+              ...t,
+              lastMessageAt: t.lastMessageAt.toISOString(),
+              snoozedUntil: t.snoozedUntil?.toISOString() ?? null,
+              labels: t.labels.map((l) => l.label.name),
+            }))}
+          />
+        </div>
       </aside>
       <section className="flex h-full flex-col items-center justify-center gap-8 p-10 text-center">
         <div className="text-sm text-muted-foreground">Select a thread to view.</div>

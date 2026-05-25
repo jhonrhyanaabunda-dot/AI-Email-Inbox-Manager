@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -119,7 +119,7 @@ model Dealership {
   name           String
   brand          String?
   location       String?
-  oemContacts    String?
+  oemContacts    Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -218,7 +218,7 @@ model EmailThread {
   priorityScore   Float?
   sentiment       String?
   aiSummary       String?
-  aiActionItems   String?
+  aiActionItems   Json?
   aiNextSteps     String?
   aiTopic         String?
   vipScore        Float?
@@ -228,7 +228,7 @@ model EmailThread {
   snoozedUntil    DateTime?
   followUpAt      DateTime?
 
-  participants    String
+  participants    Json
   lastMessageAt   DateTime
   firstMessageAt  DateTime
   messageCount    Int      @default(0)
@@ -269,10 +269,10 @@ model Email {
   direction       String
   fromEmail       String
   fromName        String?
-  toEmails        String
-  ccEmails        String?
-  bccEmails       String?
-  replyToEmails   String?
+  toEmails        Json
+  ccEmails        Json?
+  bccEmails       Json?
+  replyToEmails   Json?
 
   subject         String?
   snippet         String?
@@ -280,7 +280,7 @@ model Email {
   bodyHtml        String?
 
   receivedAt      DateTime
-  rawHeaders      String?
+  rawHeaders      Json?
 
   isRead          Boolean  @default(false)
   hasAttachments  Boolean  @default(false)
@@ -352,8 +352,8 @@ model AiDraft {
   subject         String?
   bodyText        String
   bodyHtml        String?
-  toEmails        String
-  ccEmails        String?
+  toEmails        Json
+  ccEmails        Json?
 
   modelUsed       String
   promptVersion   String
@@ -390,9 +390,9 @@ model Escalation {
   status          String   @default("OPEN")
   riskScore       Float
   summary         String
-  signals         String
-  recommendedActions String
-  routedTo        String?
+  signals         Json
+  recommendedActions Json
+  routedTo        Json?
   modelUsed       String
   promptVersion   String
 
@@ -469,8 +469,8 @@ model Workflow {
   description     String?
   isEnabled       Boolean  @default(true)
   trigger         String
-  conditions      String
-  actions         String
+  conditions      Json
+  actions         Json
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -486,11 +486,11 @@ model DailyBriefing {
   forDate         DateTime
 
   summary         String
-  topThreads      String
+  topThreads      Json
   openEscalations Int      @default(0)
   newLeads        Int      @default(0)
   pendingDrafts   Int      @default(0)
-  metrics         String
+  metrics         Json
   modelUsed       String
 
   createdAt       DateTime @default(now())
@@ -511,7 +511,7 @@ model SyncJob {
   kind            String
   status          String   @default("QUEUED")
   cursor          String?
-  payload         String?
+  payload         Json?
   processedCount  Int      @default(0)
   errorMessage    String?
   attempt         Int      @default(0)
@@ -531,7 +531,7 @@ model ApiToken {
   name            String
   tokenHash       String   @unique
   prefix          String
-  scopes          String
+  scopes          Json
   lastUsedAt      DateTime?
   expiresAt       DateTime?
   revokedAt       DateTime?
@@ -556,7 +556,7 @@ model ActivityLog {
   kind            String
   targetType      String?
   targetId        String?
-  meta            String?
+  meta            Json?
   ip              String?
   userAgent       String?
   createdAt       DateTime @default(now())

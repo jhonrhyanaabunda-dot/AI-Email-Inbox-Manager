@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mailbox as MailboxIcon, Users, KeyRound, Building2, Settings as SettingsIcon } from "lucide-react";
+import { Mailbox as MailboxIcon, Users, KeyRound, Building2, Settings as SettingsIcon, Workflow } from "lucide-react";
 
 export default function SettingsPage() {
   const items = [
     { href: "/settings/mailboxes", title: "Mailboxes", desc: "Connect Gmail and Microsoft 365 inboxes", icon: MailboxIcon },
+    { href: "/settings/workflows", title: "Workflows", desc: "Automation rules — auto-route, auto-archive, escalation routing", icon: Workflow },
     { href: "/settings/team", title: "Team", desc: "Manage users, roles, and dealership assignments", icon: Users },
     { href: "/settings/dealerships", title: "Dealerships", desc: "Stores under this organization", icon: Building2 },
     { href: "/settings/api-tokens", title: "API tokens", desc: "Programmatic access for integrations", icon: KeyRound },

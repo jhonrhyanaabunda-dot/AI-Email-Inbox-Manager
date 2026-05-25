@@ -6,7 +6,8 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const J = (v: unknown) => JSON.stringify(v);
+// Identity — Prisma serializes native objects into Json columns on Postgres.
+const J = <T>(v: T): T => v;
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const ago = (ms: number) => new Date(Date.now() - ms);
@@ -797,6 +798,219 @@ async function main() {
         },
       });
     }
+  }
+
+  // ─── Collaboration data on a handful of threads ────────────────────────────
+  // Helper: look up thread by index
+  const threadById = async (i: number) =>
+    prisma.emailThread.findUnique({
+      where: { mailboxId_providerThreadId: { mailboxId: mailbox.id, providerThreadId: `seed-thread-${i.toString().padStart(2, "0")}` } },
+    });
+  const labelMap = Object.fromEntries(
+    (await prisma.label.findMany({ where: { organizationId: org.id } })).map((l) => [l.name, l.id])
+  );
+
+  // Assignments — show the multi-user collab story
+  const assignmentPlan: Array<{ idx: number; userId: string; assignedBy: string }> = [
+    { idx: 0, userId: principal.id, assignedBy: principal.id },                  // lemon law → principal
+    { idx: 1, userId: marketing.id, assignedBy: principal.id },                  // Q3 co-op → marketing
+    { idx: 2, userId: gm.id, assignedBy: principal.id },                          // Explorer trade-in → GM
+    { idx: 5, userId: principal.id, assignedBy: principal.id },                  // Kelly board prep → principal
+    { idx: 6, userId: gm.id, assignedBy: principal.id },                          // Ford EV cert → GM
+    { idx: 14, userId: marketing.id, assignedBy: principal.id },                  // Halloween campaign → marketing
+  ];
+  for (const a of assignmentPlan) {
+    const t = await threadById(a.idx);
+    if (t) {
+      await prisma.threadAssignment.create({
+        data: { threadId: t.id, userId: a.userId, assignedBy: a.assignedBy },
+      });
+    }
+  }
+
+  // Internal comments
+  const commentPlan: Array<{ idx: number; userId: string; body: string; hoursAgo: number }> = [
+    { idx: 0, userId: gm.id, hoursAgo: 22, body: "Pulled all ROs for this VIN. Three different techs touched it, root cause may be valve body. Sending you the file." },
+    { idx: 0, userId: principal.id, hoursAgo: 21, body: "Talked to outside counsel. We do NOT acknowledge in writing yet. I'm calling Maria personally at 2pm." },
+    { idx: 2, userId: gm.id, hoursAgo: 4, body: "Pre-approved Riley last spring on a different deal — financing should fly." },
+    { idx: 4, userId: principal.id, hoursAgo: 30, body: "Acknowledged receipt to employee, kept confidential. Outside employment counsel engaged. Will not discuss with subject until counsel signals OK." },
+    { idx: 5, userId: principal.id, hoursAgo: 36, body: "Fixed Ops has the template — Maria S. on it. Deck draft Sunday night." },
+  ];
+  for (const c of commentPlan) {
+    const t = await threadById(c.idx);
+    if (t) {
+      await prisma.threadComment.create({
+        data: {
+          threadId: t.id,
+          userId: c.userId,
+          body: c.body,
+          createdAt: ago(c.hoursAgo * HOUR),
+        },
+      });
+    }
+  }
+
+  // Labels — apply to a handful for visual variety
+  const labelPlan: Array<{ idx: number; label: string }> = [
+    { idx: 0, label: "Legal" }, { idx: 0, label: "Important" },
+    { idx: 1, label: "OEM" }, { idx: 1, label: "VIP" },
+    { idx: 2, label: "Sales" }, { idx: 2, label: "Customer" },
+    { idx: 4, label: "Important" },
+    { idx: 5, label: "Important" }, { idx: 5, label: "VIP" },
+    { idx: 6, label: "OEM" },
+    { idx: 11, label: "VIP" }, { idx: 11, label: "OEM" },
+    { idx: 13, label: "Newsletter" },
+    { idx: 16, label: "Newsletter" },
+    { idx: 18, label: "OEM" }, { idx: 18, label: "Important" },
+  ];
+  for (const l of labelPlan) {
+    const t = await threadById(l.idx);
+    const labelId = labelMap[l.label];
+    if (t && labelId) {
+      await prisma.threadLabel.create({
+        data: { threadId: t.id, labelId, appliedBy: "ai:categorization" },
+      }).catch(() => null);
+    }
+  }
+
+  // Snoozed + follow-up — show the "for later" workflow
+  // Snooze 3 threads (the FYI ones), set follow-up reminders on 2 important ones
+  const snoozePlan = [
+    { idx: 7, snoozeHours: 26 },   // Marcus Maverick — until tomorrow morning
+    { idx: 11, snoozeHours: 48 },  // Toyota council — think about it for 2 days
+    { idx: 19, snoozeHours: 72 },  // Recruiting application — review later in week
+  ];
+  for (const s of snoozePlan) {
+    const t = await threadById(s.idx);
+    if (t) {
+      await prisma.emailThread.update({
+        where: { id: t.id },
+        data: { snoozedUntil: new Date(Date.now() + s.snoozeHours * HOUR), status: "SNOOZED" },
+      });
+    }
+  }
+
+  const followUpPlan = [
+    { idx: 2, hours: 4 },   // Explorer trade-in: chase if no reply in 4h
+    { idx: 5, hours: 48 },  // Kelly board prep: follow up Sunday
+    { idx: 18, hours: 24 }, // Facility audit: chase tomorrow if not handled
+  ];
+  for (const f of followUpPlan) {
+    const t = await threadById(f.idx);
+    if (t) {
+      await prisma.emailThread.update({
+        where: { id: t.id },
+        data: { followUpAt: new Date(Date.now() + f.hours * HOUR) },
+      });
+    }
+  }
+
+  // ─── Workflows ─────────────────────────────────────────────────────────────
+  const workflows = [
+    {
+      name: "Auto-archive vendor noreply digests",
+      description: "Anything from noreply@dealersocket / cdk / newsletters auto-archives after a 24h read window.",
+      trigger: "email.received",
+      conditions: [{ field: "fromEmail", op: "endsWith", value: "@dealersocket.test" }, { field: "category", op: "equals", value: "NEWSLETTER" }],
+      actions: [{ type: "archive_after", params: { hours: 24 } }, { type: "label", params: { name: "Newsletter" } }],
+    },
+    {
+      name: "Escalate legal threats to dealer principal",
+      description: "Any thread the legal-risk agent flags with risk ≥ 0.7 pages the dealer principal in Slack.",
+      trigger: "thread.escalated",
+      conditions: [{ field: "kind", op: "in", value: ["LEGAL_THREAT", "LAWSUIT", "HR_COMPLAINT"] }, { field: "riskScore", op: "gte", value: 0.7 }],
+      actions: [{ type: "assign", params: { role: "DEALER_PRINCIPAL" } }, { type: "notify_slack", params: { channel: "#leadership-urgent" } }],
+    },
+    {
+      name: "Route sales leads to BDC manager within 5 min",
+      description: "Every new SALES_LEAD inbound gets assigned to the BDC manager and the AI draft is auto-prepared.",
+      trigger: "email.received",
+      conditions: [{ field: "category", op: "equals", value: "SALES_LEAD" }],
+      actions: [{ type: "assign", params: { role: "GM" } }, { type: "ai_draft", params: { tone: "warm" } }],
+    },
+    {
+      name: "OEM communications → marketing director",
+      description: "Auto-assign Ford / Toyota / OEM correspondence to marketing director with VIP flag.",
+      trigger: "email.received",
+      conditions: [{ field: "category", op: "equals", value: "OEM_COMMUNICATION" }],
+      actions: [{ type: "assign", params: { role: "MARKETING_DIRECTOR" } }, { type: "label", params: { name: "OEM" } }],
+    },
+    {
+      name: "Snooze followup 4h on outbound replies",
+      description: "When an outbound reply is sent and no inbound comes back in 4h, ping the GM.",
+      trigger: "thread.idle",
+      conditions: [{ field: "lastOutboundAgeHours", op: "gte", value: 4 }, { field: "category", op: "in", value: ["SALES_LEAD", "CUSTOMER_INQUIRY"] }],
+      actions: [{ type: "create_followup", params: { hours: 4 } }],
+    },
+  ];
+  for (const w of workflows) {
+    await prisma.workflow.create({
+      data: {
+        organizationId: org.id,
+        name: w.name,
+        description: w.description,
+        isEnabled: true,
+        trigger: w.trigger,
+        conditions: J(w.conditions),
+        actions: J(w.actions),
+      },
+    });
+  }
+
+  // ─── Synthetic outbound history for response-time analytics ────────────────
+  // Add a small number of OUTBOUND replies on past threads at varied lags to make
+  // the response-time metric real. We pick threads that already have a draft.
+  const outboundPlan: Array<{ idx: number; lagMinutes: number }> = [
+    { idx: 8, lagMinutes: 22 },     // Helen loaner — fast reply
+    { idx: 15, lagMinutes: 95 },    // Bronco Sport appointment — under 2h
+    { idx: 17, lagMinutes: 38 },    // Mach-E recall — fast
+    { idx: 20, lagMinutes: 240 },   // window sticker — 4h
+    { idx: 1, lagMinutes: 75 },     // Q3 co-op — 1h15
+    { idx: 11, lagMinutes: 180 },   // Toyota council — 3h
+    { idx: 6, lagMinutes: 410 },    // Ford EV cert — same day
+    { idx: 19, lagMinutes: 600 },   // Tomas Rivera — 10h
+    { idx: 21, lagMinutes: 28 },    // CarGurus — fast (auto)
+  ];
+  for (const o of outboundPlan) {
+    const t = await threadById(o.idx);
+    if (!t) continue;
+    const replyAt = new Date(t.lastMessageAt.getTime() + o.lagMinutes * 60 * 1000);
+    await prisma.email.create({
+      data: {
+        organizationId: org.id,
+        mailboxId: mailbox.id,
+        threadId: t.id,
+        providerMessageId: `seed-out-${o.idx.toString().padStart(2, "0")}`,
+        providerThreadId: t.providerThreadId,
+        direction: "OUTBOUND",
+        fromEmail: "principal@a3brands.test",
+        fromName: "Jordan Reyes",
+        toEmails: J([t.providerThreadId]),
+        subject: `Re: ${t.subject ?? ""}`,
+        snippet: "Thanks for the note — I'll have …",
+        bodyText: "Thanks for the note — I'll have someone follow up shortly with details.",
+        receivedAt: replyAt,
+      },
+    });
+    await prisma.emailThread.update({
+      where: { id: t.id },
+      data: { lastMessageAt: replyAt, messageCount: { increment: 1 } },
+    });
+  }
+
+  // ─── Activity log seed (shows the audit trail in analytics) ────────────────
+  const activityKinds = ["DRAFT_APPROVED", "DRAFT_SENT", "ESCALATION_ACKED", "THREAD_ARCHIVE", "THREAD_LABEL", "WORKFLOW_TRIGGERED"];
+  for (let h = 0; h < 24 * 7; h += 6) {
+    const k = activityKinds[Math.floor(Math.random() * activityKinds.length)];
+    await prisma.activityLog.create({
+      data: {
+        organizationId: org.id,
+        userId: [principal.id, gm.id, marketing.id][Math.floor(Math.random() * 3)],
+        kind: k,
+        targetType: "thread",
+        createdAt: ago(h * HOUR),
+      },
+    });
   }
 
   // ─── 7 daily briefings ──────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ export async function audit(entry: AuditEntry): Promise<void> {
         kind: entry.kind,
         targetType: entry.targetType,
         targetId: entry.targetId,
-        meta: toJsonColumn(entry.meta),
+        meta: toJsonColumn(entry.meta) as Prisma.InputJsonValue | undefined,
         ip: entry.ip,
         userAgent: entry.userAgent,
       },

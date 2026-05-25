@@ -1,8 +1,12 @@
+import type { Prisma } from "@prisma/client";
 import { EmailDirection } from "../enums";
 import { prisma } from "../db";
 import { logger } from "../logger";
-import { toJsonColumn } from "../json-column";
 import type { NormalizedEmail } from "./normalizer";
+
+const J = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
+const Jopt = (v: unknown): Prisma.InputJsonValue | undefined =>
+  v === undefined || v === null ? undefined : (v as Prisma.InputJsonValue);
 
 /**
  * Idempotently persist a normalized email + ensure its thread exists.
@@ -23,7 +27,7 @@ export async function upsertEmail(
   });
   if (existing) return { emailId: existing.id, threadId: existing.threadId, created: false };
 
-  const participants = toJsonColumn(uniqueParticipants(msg)) ?? "[]";
+  const participants = J(uniqueParticipants(msg));
   const thread = await prisma.emailThread.upsert({
     where: { mailboxId_providerThreadId: { mailboxId, providerThreadId: msg.providerThreadId } },
     update: {
@@ -57,17 +61,17 @@ export async function upsertEmail(
       direction: msg.direction as EmailDirection,
       fromEmail: msg.from.email,
       fromName: msg.from.name,
-      toEmails: toJsonColumn(msg.to.map((a) => a.email)) ?? "[]",
-      ccEmails: toJsonColumn(msg.cc.length ? msg.cc.map((a) => a.email) : undefined),
-      bccEmails: toJsonColumn(msg.bcc.length ? msg.bcc.map((a) => a.email) : undefined),
-      replyToEmails: toJsonColumn(msg.replyTo.length ? msg.replyTo.map((a) => a.email) : undefined),
+      toEmails: J(msg.to.map((a) => a.email)),
+      ccEmails: Jopt(msg.cc.length ? msg.cc.map((a) => a.email) : undefined),
+      bccEmails: Jopt(msg.bcc.length ? msg.bcc.map((a) => a.email) : undefined),
+      replyToEmails: Jopt(msg.replyTo.length ? msg.replyTo.map((a) => a.email) : undefined),
       subject: msg.subject,
       snippet: msg.snippet,
       bodyText: msg.bodyText,
       bodyHtml: msg.bodyHtml,
       receivedAt: msg.receivedAt,
       hasAttachments: msg.hasAttachments,
-      rawHeaders: toJsonColumn(msg.headers),
+      rawHeaders: Jopt(msg.headers),
       attachments: msg.attachments.length
         ? {
             create: msg.attachments.map((a) => ({

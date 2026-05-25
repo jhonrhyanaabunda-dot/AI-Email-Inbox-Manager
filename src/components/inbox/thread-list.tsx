@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Star, Sparkles } from "lucide-react";
+import { Star, Sparkles, Clock, Tag } from "lucide-react";
 import { cn, relativeTime, truncate } from "@/lib/utils";
 import { PriorityBadge, CategoryBadge } from "./priority-badge";
 
@@ -20,11 +20,12 @@ export interface ThreadRow {
   messageCount: number;
   aiSummary: string | null;
   participants: unknown;
+  labels?: string[];
+  snoozedUntil?: string | null;
 }
 
 export function ThreadList({ threads }: { threads: ThreadRow[] }) {
   const params = useParams<{ threadId?: string }>();
-  // Topbar writes the live search query to document.documentElement.dataset.search.
   const [query, setQuery] = useState("");
   useEffect(() => {
     const html = document.documentElement;
@@ -42,6 +43,7 @@ export function ThreadList({ threads }: { threads: ThreadRow[] }) {
           t.snippet ?? "",
           t.aiSummary ?? "",
           t.category ?? "",
+          (t.labels ?? []).join(" "),
           pickFromName(t.participants),
         ]
           .join(" ")
@@ -53,9 +55,11 @@ export function ThreadList({ threads }: { threads: ThreadRow[] }) {
   if (!filtered.length) {
     return (
       <div className="flex h-full items-center justify-center p-10 text-center text-[13px] text-muted-foreground">
-        {query
-          ? <>No matches for "<span className="font-semibold text-foreground">{query}</span>"</>
-          : "Inbox zero. Nothing for the GM to triage."}
+        {query ? (
+          <>No matches for &quot;<span className="font-semibold text-foreground">{query}</span>&quot;</>
+        ) : (
+          "Inbox zero. Nothing for the GM to triage."
+        )}
       </div>
     );
   }
@@ -64,13 +68,15 @@ export function ThreadList({ threads }: { threads: ThreadRow[] }) {
     <>
       {query && (
         <div className="border-b border-border bg-secondary px-4 py-2 text-[11px] text-muted-foreground">
-          {filtered.length} of {threads.length} threads matching "<span className="font-semibold text-foreground">{query}</span>"
+          {filtered.length} of {threads.length} threads matching &quot;
+          <span className="font-semibold text-foreground">{query}</span>&quot;
         </div>
       )}
       <ul className="divide-y divide-border">
         {filtered.map((t) => {
           const fromName = pickFromName(t.participants);
           const active = params?.threadId === t.id;
+          const labels = t.labels ?? [];
           return (
             <li key={t.id} className="relative">
               {active && <span className="absolute left-0 top-0 h-full w-[3px] bg-primary" />}
@@ -89,6 +95,12 @@ export function ThreadList({ threads }: { threads: ThreadRow[] }) {
                   {t.isVip ? <Star className="h-3 w-3 fill-primary stroke-primary" aria-label="VIP" /> : null}
                   <PriorityBadge priority={t.priority} />
                   <CategoryBadge category={t.category} />
+                  {t.snoozedUntil ? (
+                    <span className="flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                      <Clock className="h-3 w-3" />
+                      <span className="font-mono text-[10px] uppercase">{relativeTime(t.snoozedUntil).replace(" ago", "")}</span>
+                    </span>
+                  ) : null}
                   <span className="ml-auto whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-a3-fog">
                     {relativeTime(t.lastMessageAt)}
                   </span>
@@ -106,6 +118,19 @@ export function ThreadList({ threads }: { threads: ThreadRow[] }) {
                   </div>
                 ) : (
                   <div className="mt-1.5 line-clamp-1 text-[12px] text-muted-foreground">{t.snippet ?? ""}</div>
+                )}
+                {labels.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {labels.map((l) => (
+                      <span
+                        key={l}
+                        className="inline-flex items-center gap-0.5 rounded-sm border border-border bg-card px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+                      >
+                        <Tag className="h-2 w-2" />
+                        {l}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </Link>
             </li>
