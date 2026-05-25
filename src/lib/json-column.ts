@@ -1,16 +1,10 @@
-// JSON column helpers.
-//
-// We're on Postgres now — Prisma serializes native objects/arrays into Json
-// columns automatically, so `toJsonColumn` is effectively the identity.
-// (It used to JSON.stringify when the dev DB was SQLite; we keep the same
-// surface so callers don't have to change.)
-//
-// `fromJsonColumn` is tolerant: returns the value as-is if Prisma gave us an
-// object/array; falls back to JSON.parse only for legacy string payloads.
+// JSON column helpers — SQLite stores JSON as TEXT.
+// `toJsonColumn` stringifies for writes; `fromJsonColumn` parses on read.
 
-export function toJsonColumn<T>(value: T | undefined | null): T | undefined {
+export function toJsonColumn(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
-  return value;
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
 }
 
 export function fromJsonColumn<T = unknown>(value: unknown, fallback: T): T {

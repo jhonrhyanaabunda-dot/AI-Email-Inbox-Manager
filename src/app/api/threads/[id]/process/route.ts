@@ -31,7 +31,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
           where: { id },
           data: {
             aiSummary: thread.aiSummary ?? summary.summary,
-            aiActionItems: summary.actionItems,
+            aiActionItems: JSON.stringify(summary.actionItems),
             priority: thread.priority ?? "NORMAL",
             priorityScore: thread.priorityScore ?? 0.5,
             category: thread.category ?? "OTHER",
@@ -49,7 +49,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
             status: "PENDING_REVIEW",
             subject: `Re: ${thread.subject ?? ""}`,
             bodyText: draft.bodyText,
-            toEmails: [latest?.fromEmail].filter(Boolean) as string[],
+            toEmails: JSON.stringify([latest?.fromEmail].filter(Boolean)),
             modelUsed: "demo",
             promptVersion: "demo-v1",
             confidence: draft.confidence,

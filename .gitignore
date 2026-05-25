@@ -14,7 +14,9 @@ tsconfig.tsbuildinfo
 .vercel
 .idea
 .vscode
-# SQLite dev databases (production uses Postgres — never commit local data)
-prisma/*.db
+# SQLite journal (transient)
 prisma/*.db-journal
 prisma/migrations/dev.db*
+# Note: prisma/dev.db IS committed — it ships pre-seeded so the Vercel demo
+# works without any database setup. Each serverless cold-start copies it from
+# the read-only bundle to /tmp where SQLite can write.

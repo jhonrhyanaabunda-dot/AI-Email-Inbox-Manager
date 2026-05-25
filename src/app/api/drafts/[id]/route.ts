@@ -35,8 +35,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: {
         bodyText: body.bodyText,
         subject: body.subject,
-        toEmails: body.toEmails ?? undefined,
-        ccEmails: body.ccEmails ?? undefined,
+        toEmails: body.toEmails ? JSON.stringify(body.toEmails) : undefined,
+        ccEmails: body.ccEmails ? JSON.stringify(body.ccEmails) : undefined,
         status: "EDITED",
       },
     });

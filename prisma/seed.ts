@@ -6,8 +6,7 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-// Identity — Prisma serializes native objects into Json columns on Postgres.
-const J = <T>(v: T): T => v;
+const J = (v: unknown) => JSON.stringify(v);
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const ago = (ms: number) => new Date(Date.now() - ms);

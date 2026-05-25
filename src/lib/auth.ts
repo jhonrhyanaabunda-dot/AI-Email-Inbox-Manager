@@ -1,10 +1,11 @@
-import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
+import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import AzureAD from "next-auth/providers/azure-ad";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./db";
 import { env } from "./env";
+import { authConfig } from "./auth.config";
 import { Role } from "./enums";
 
 declare module "next-auth" {
@@ -21,12 +22,10 @@ declare module "next-auth" {
   }
 }
 
-const config: NextAuthConfig = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
   secret: env().AUTH_SECRET,
-  trustHost: true,
-  session: { strategy: "jwt" },
-  pages: { signIn: "/login" },
   providers: [
     ...(env().GOOGLE_CLIENT_ID && env().GOOGLE_CLIENT_SECRET
       ? [
@@ -42,16 +41,15 @@ const config: NextAuthConfig = {
           AzureAD({
             clientId: env().MICROSOFT_CLIENT_ID!,
             clientSecret: env().MICROSOFT_CLIENT_SECRET!,
-            issuer: `https://login.microsoftonline.com/${env().MICROSOFT_TENANT_ID}/v2.0`,
+            tenantId: env().MICROSOFT_TENANT_ID,
           }),
         ]
       : []),
     Credentials({
       name: "Email",
       credentials: { email: { label: "Email", type: "email" } },
-      // Dev/preview-only magic — production must enable a real provider.
+      // Demo-friendly: accept any email of a seeded user, no password required.
       authorize: async (creds) => {
-        if (env().NODE_ENV === "production") return null;
         const email = String(creds?.email ?? "").trim().toLowerCase();
         if (!email) return null;
         const user = await prisma.user.findUnique({ where: { email } });
@@ -60,6 +58,7 @@ const config: NextAuthConfig = {
     }),
   ],
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user, trigger }) {
       if (user?.id) token.uid = user.id;
       if (trigger === "update" || !token.organizationId) {
@@ -72,7 +71,7 @@ const config: NextAuthConfig = {
           if (dbUser) {
             token.uid = dbUser.id;
             token.organizationId = dbUser.organizationId;
-            token.role = dbUser.role;
+            token.role = dbUser.role as Role;
           }
         }
       }
@@ -92,6 +91,4 @@ const config: NextAuthConfig = {
       }
     },
   },
-};
-
-export const { handlers, auth, signIn, signOut } = NextAuth(config);
+});

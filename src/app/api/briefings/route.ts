@@ -40,11 +40,11 @@ export async function POST() {
         where: { userId_forDate: { userId: session.userId, forDate: today } },
         update: {
           summary: digest.summary,
-          topThreads: digest.topThreads,
+          topThreads: JSON.stringify(digest.topThreads),
           openEscalations: openEsc,
           newLeads: leads,
           pendingDrafts: drafts,
-          metrics: { inboxVolume: 26 },
+          metrics: JSON.stringify({ inboxVolume: 26 }),
           modelUsed: "demo",
         },
         create: {
@@ -52,11 +52,11 @@ export async function POST() {
           userId: session.userId,
           forDate: today,
           summary: digest.summary,
-          topThreads: digest.topThreads,
+          topThreads: JSON.stringify(digest.topThreads),
           openEscalations: openEsc,
           newLeads: leads,
           pendingDrafts: drafts,
-          metrics: { inboxVolume: 26 },
+          metrics: JSON.stringify({ inboxVolume: 26 }),
           modelUsed: "demo",
         },
       });
