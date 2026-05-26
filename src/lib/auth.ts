@@ -8,6 +8,17 @@ import { env } from "./env";
 import { authConfig } from "./auth.config";
 import { Role } from "./enums";
 
+// Demo users — the 3 seeded accounts. IDs match what db-bootstrap.ts
+// inserts so JWT.uid → real Prisma User.id lookups still work.
+const DEMO_USERS: Record<string, { id: string; name: string; organizationId: string; role: Role }> = {
+  "principal@a3brands.test": { id: "demo-principal", name: "Jordan Reyes", organizationId: "demo-org", role: "DEALER_PRINCIPAL" as Role },
+  "gm@a3brands.test": { id: "demo-gm", name: "Sam Patel", organizationId: "demo-org", role: "GM" as Role },
+  "marketing@a3brands.test": { id: "demo-marketing", name: "Devon Walker", organizationId: "demo-org", role: "MARKETING_DIRECTOR" as Role },
+};
+const DEMO_USERS_BY_ID = Object.fromEntries(
+  Object.entries(DEMO_USERS).map(([email, u]) => [u.id, { ...u, email }]),
+);
+
 declare module "next-auth" {
   interface Session {
     user: {
@@ -55,9 +66,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorize: async (creds) => {
         const email = String(creds?.email ?? "").trim().toLowerCase();
         if (!email) return null;
+        // Hardcoded demo allowlist so login is bulletproof on Vercel even
+        // when Prisma/SQLite is having a bad day. The 3 emails map to the
+        // user IDs we seed into the DB via db-bootstrap.ts.
+        const u = DEMO_USERS[email];
+        if (u) return { id: u.id, email, name: u.name };
+        // Fall back to a Prisma lookup for non-demo emails (e.g. real OAuth
+        // imports in production). Swallow errors so a broken DB doesn't show
+        // the scary NextAuth "Configuration" page.
         try {
-          // db.ts wraps prisma with an extension that auto-bootstraps the DB
-          // (migrate + seed) on the first query of each cold start.
           const user = await prisma.user.findUnique({ where: { email } });
           return user ? { id: user.id, email: user.email, name: user.name ?? undefined } : null;
         } catch (err) {
@@ -74,14 +91,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (trigger === "update" || !token.organizationId) {
         const uid = (token.uid as string | undefined) ?? token.sub;
         if (uid) {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: uid },
-            select: { id: true, organizationId: true, role: true },
-          });
-          if (dbUser) {
-            token.uid = dbUser.id;
-            token.organizationId = dbUser.organizationId;
-            token.role = dbUser.role as Role;
+          // Demo users: hardcoded so the JWT can be issued even if Prisma is
+          // unavailable. Real users: look up org/role in the DB.
+          const demo = DEMO_USERS_BY_ID[uid];
+          if (demo) {
+            token.uid = demo.id;
+            token.organizationId = demo.organizationId;
+            token.role = demo.role;
+          } else {
+            try {
+              const dbUser = await prisma.user.findUnique({
+                where: { id: uid },
+                select: { id: true, organizationId: true, role: true },
+              });
+              if (dbUser) {
+                token.uid = dbUser.id;
+                token.organizationId = dbUser.organizationId;
+                token.role = dbUser.role as Role;
+              }
+            } catch (err) {
+              console.error("[auth] jwt prisma error:", err);
+            }
           }
         }
       }

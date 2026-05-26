@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { demoSignInAction } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +15,6 @@ export default function LoginPage() {
     e.preventDefault();
     setPending(true);
     await signIn("credentials", { email, callbackUrl: "/inbox" });
-  }
-
-  async function quickSignIn(demoEmail: string) {
-    setPending(true);
-    await signIn("credentials", { email: demoEmail, callbackUrl: "/inbox" });
   }
 
   return (
@@ -99,29 +95,24 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Button
-                className="w-full"
-                disabled={pending}
-                onClick={() => quickSignIn("principal@a3brands.test")}
-              >
-                {pending ? "Signing in…" : "Enter demo as Dealer Principal"}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={pending}
-                onClick={() => quickSignIn("gm@a3brands.test")}
-              >
-                Enter demo as GM
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={pending}
-                onClick={() => quickSignIn("marketing@a3brands.test")}
-              >
-                Enter demo as Marketing
-              </Button>
+              <form action={demoSignInAction}>
+                <input type="hidden" name="email" value="principal@a3brands.test" />
+                <Button type="submit" className="w-full">
+                  Enter demo as Dealer Principal
+                </Button>
+              </form>
+              <form action={demoSignInAction}>
+                <input type="hidden" name="email" value="gm@a3brands.test" />
+                <Button type="submit" variant="outline" className="w-full">
+                  Enter demo as GM
+                </Button>
+              </form>
+              <form action={demoSignInAction}>
+                <input type="hidden" name="email" value="marketing@a3brands.test" />
+                <Button type="submit" variant="outline" className="w-full">
+                  Enter demo as Marketing
+                </Button>
+              </form>
             </div>
 
             <details className="pt-2">
