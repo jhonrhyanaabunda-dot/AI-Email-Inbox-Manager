@@ -16,6 +16,11 @@ export default function LoginPage() {
     await signIn("credentials", { email, callbackUrl: "/inbox" });
   }
 
+  async function quickSignIn(demoEmail: string) {
+    setPending(true);
+    await signIn("credentials", { email: demoEmail, callbackUrl: "/inbox" });
+  }
+
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
       {/* Marketing — A3 hero, dark navy + emerald */}
@@ -93,22 +98,49 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <form onSubmit={submit} className="space-y-3">
-              <Input
-                type="email"
-                required
-                placeholder="principal@apexford.test"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <Button type="submit" className="w-full" disabled={pending}>
-                {pending ? "Signing in…" : "Enter A3 Inbox AI"}
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                disabled={pending}
+                onClick={() => quickSignIn("principal@a3brands.test")}
+              >
+                {pending ? "Signing in…" : "Enter demo as Dealer Principal"}
               </Button>
-              <p className="text-center text-[11px] text-a3-fog">
-                Try <span className="font-mono text-foreground">principal@apexford.test</span> or{" "}
-                <span className="font-mono text-foreground">gm@apexford.test</span>
-              </p>
-            </form>
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={pending}
+                onClick={() => quickSignIn("gm@a3brands.test")}
+              >
+                Enter demo as GM
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={pending}
+                onClick={() => quickSignIn("marketing@a3brands.test")}
+              >
+                Enter demo as Marketing
+              </Button>
+            </div>
+
+            <details className="pt-2">
+              <summary className="cursor-pointer text-[11px] text-a3-fog hover:text-foreground">
+                Or sign in with a custom email
+              </summary>
+              <form onSubmit={submit} className="space-y-3 pt-3">
+                <Input
+                  type="email"
+                  required
+                  placeholder="principal@a3brands.test"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <Button type="submit" className="w-full" disabled={pending}>
+                  {pending ? "Signing in…" : "Sign in"}
+                </Button>
+              </form>
+            </details>
           </CardContent>
         </Card>
       </main>

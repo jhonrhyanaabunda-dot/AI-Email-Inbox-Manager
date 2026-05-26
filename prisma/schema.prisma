@@ -3,7 +3,8 @@
 // Here, enum types are simulated as strings; allowed values are listed in comments.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {

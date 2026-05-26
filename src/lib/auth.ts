@@ -49,11 +49,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       name: "Email",
       credentials: { email: { label: "Email", type: "email" } },
       // Demo-friendly: accept any email of a seeded user, no password required.
+      // Swallow Prisma errors so a broken DB never surfaces as the generic
+      // NextAuth "Configuration" error — return null instead so the user just
+      // sees "invalid credentials" on the login page.
       authorize: async (creds) => {
         const email = String(creds?.email ?? "").trim().toLowerCase();
         if (!email) return null;
-        const user = await prisma.user.findUnique({ where: { email } });
-        return user ? { id: user.id, email: user.email, name: user.name ?? undefined } : null;
+        try {
+          const user = await prisma.user.findUnique({ where: { email } });
+          return user ? { id: user.id, email: user.email, name: user.name ?? undefined } : null;
+        } catch (err) {
+          console.error("[auth] authorize prisma error:", err);
+          return null;
+        }
       },
     }),
   ],
