@@ -36,6 +36,9 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
         messageCount: true,
         participants: true,
         aiSummary: true,
+        hasPendingDraft: true,
+        openEscalationCount: true,
+        commentCount: true,
         labels: { include: { label: { select: { name: true } } } },
         snoozedUntil: true,
       },
@@ -71,6 +74,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
         <InboxTabs counts={counts} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <ThreadList
+            view="INBOX"
             threads={threads.map((t) => ({
               ...t,
               lastMessageAt: t.lastMessageAt.toISOString(),

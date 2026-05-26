@@ -44,6 +44,9 @@ export default async function InboxIndex({
         participants: true,
         aiSummary: true,
         snoozedUntil: true,
+        hasPendingDraft: true,
+        openEscalationCount: true,
+        commentCount: true,
         labels: { include: { label: { select: { name: true } } } },
       },
     }),
@@ -60,6 +63,7 @@ export default async function InboxIndex({
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {view === "INBOX" && archivableCount > 0 && <SmartArchiveBanner count={archivableCount} />}
           <ThreadList
+            view={view}
             threads={threads.map((t) => ({
               ...t,
               lastMessageAt: t.lastMessageAt.toISOString(),

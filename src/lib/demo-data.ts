@@ -420,7 +420,7 @@ export const DEMO_ESCALATIONS = DEMO_THREADS.filter((t) => t._seed.hasEscalation
   id: `esc-${i + 1}`,
   organizationId: "demo-org",
   threadId: t.id,
-  thread: { id: t.id, subject: t.subject },
+  thread: { id: t.id, subject: t.subject, priority: t.priority, category: t.category },
   kind: t._seed.escalationKind ?? "LEGAL_THREAT",
   severity: t._seed.priority === "CRITICAL" ? "CRITICAL" : "HIGH",
   status: i === 0 ? "OPEN" : "ACKNOWLEDGED",
@@ -434,19 +434,64 @@ export const DEMO_ESCALATIONS = DEMO_THREADS.filter((t) => t._seed.hasEscalation
   updatedAt: ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
 }));
 
-export const DEMO_BRIEFINGS = Array.from({ length: 7 }, (_, i) => ({
-  id: `brief-${i + 1}`,
-  organizationId: "demo-org",
-  userId: "demo-principal",
-  forDate: ago((i + 1) * DAY),
-  summary: i === 0
-    ? "Q3 facility imaging audit overdue — $5K penalty risk if not in this week. Tomas Rivera Service Advisor application looks strong; routed to HR. Light email day overall."
-    : `Day ${7 - i} digest: ${15 + ((i * 3) % 12)} threads triaged, ${(i % 3) + 1} escalations, ${(i % 4) + 2} drafts pending review.`,
-  topThreadIds: JSON.stringify(DEMO_THREADS.slice(0, 3).map((t) => t.id)),
-  metrics: JSON.stringify({ inbox: 15 + ((i * 3) % 12), escalations: (i % 3) + 1, drafts: (i % 4) + 2 }),
-  createdAt: ago((i + 1) * DAY),
-  updatedAt: ago((i + 1) * DAY),
-}));
+/**
+ * One briefing per day for the past 7 days. The "for today" briefing (i=0)
+ * has the richest content; older days fade to lighter summaries.
+ */
+export const DEMO_BRIEFINGS = Array.from({ length: 7 }, (_, i) => {
+  const forDate = ago(i * DAY);
+  // forDate is set to 7am of that day so the briefing feels like the real
+  // 7am-cron output.
+  forDate.setHours(7, 0, 0, 0);
+
+  const isToday = i === 0;
+  const summary = isToday
+    ? "Two items need your eyes this morning: the F-150 lemon-law thread (counsel demands buyback in 10 business days) and the Ford Q3 co-op deadline Friday — $48K at stake. Devon's Halloween campaign concept is ready for a yes/no. Riley Thompson's Explorer trade-in is comparing offers; AI drafted a $27,500 counter."
+    : i === 1
+      ? "Yesterday: Q3 facility imaging audit notice from Ford — $5K/mo penalty risk if not remediated this week. Tomas Rivera Service Advisor application looks strong; routed to HR. Light email day overall."
+      : `${20 - i} threads triaged. ${(i % 3) + 1} escalation${(i % 3) + 1 === 1 ? "" : "s"} flagged. ${
+          (i % 4) + 2
+        } AI drafts shipped after your approval. Top discussion: ${
+          ["Ford EV cert audit", "Toyota flooring audit", "Co-op funds", "Service complaint", "VIP intro from Kelly"][i % 5]
+        }.`;
+
+  return {
+    id: `brief-${i + 1}`,
+    organizationId: "demo-org",
+    userId: "demo-principal",
+    forDate,
+    summary,
+    // topThreads is JSON-stringified for SQLite-compat; demo pages parse it.
+    topThreads: JSON.stringify(
+      DEMO_THREADS.filter((t) => !["NEWSLETTER", "DONE"].includes(t.status))
+        .slice(0, 3)
+        .map((t) => ({
+          threadId: t.id,
+          subject: t.subject,
+          priority: t.priority,
+          reason:
+            t.priority === "CRITICAL"
+              ? "Time-critical legal exposure"
+              : t.priority === "HIGH"
+                ? "Action needed today"
+                : "Worth your eyes",
+        })),
+    ),
+    metrics: JSON.stringify({
+      threadsTriaged: 18 + ((i * 5) % 14),
+      drafts: (i % 4) + 2,
+      escalations: (i % 3) + 1,
+    }),
+    threadsTriaged: 18 + ((i * 5) % 14),
+    openEscalations: i === 0 ? 2 : (i % 3) + 1,
+    newLeads: i === 0 ? 4 : (i % 4) + 1,
+    pendingDrafts: i === 0 ? 4 : (i % 4) + 2,
+    aiReplyRate: 0.72 + ((i * 0.03) % 0.2),
+    modelUsed: i === 0 ? "gpt-4o" : "gpt-4o-mini",
+    createdAt: forDate,
+    updatedAt: forDate,
+  };
+});
 
 export const DEMO_COMMENTS = [
   {
@@ -581,9 +626,15 @@ for (const t of DEMO_THREADS as any[]) {
     ...c,
     user: DEMO_USERS.find((u) => u.id === c.userId) ?? null,
   }));
-  // aiActionItems / followUpAt / toEmails / rationale / recommendedActions
-  // aren't on the original Prisma schema but the thread-detail page reads
-  // them — provide safe defaults so destructuring doesn't crash.
+  // Precomputed indicator fields the ThreadList uses to show "draft pending"
+  // / "escalation open" / "N comments" dots without a separate query per row.
+  t.hasPendingDraft = t.drafts.some((d: any) => d.status === "PENDING_REVIEW");
+  t.openEscalationCount = t.escalations.filter(
+    (e: any) => e.status === "OPEN" || e.status === "ACKNOWLEDGED",
+  ).length;
+  t.commentCount = t.comments.length;
+  // aiActionItems / followUpAt aren't on the original Prisma schema but the
+  // thread-detail page reads them — provide safe defaults.
   t.aiActionItems = JSON.parse(t.actionItems ?? "[]");
   t.followUpAt = null;
 }
