@@ -52,11 +52,37 @@ function resolveDatabaseUrl(): string {
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma =
+const rawPrisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: env().NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     datasources: { db: { url: resolveDatabaseUrl() } },
   });
 
-if (env().NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (env().NODE_ENV !== "production") globalForPrisma.prisma = rawPrisma;
+
+/**
+ * On Vercel, transparently bootstrap (migrate + seed) the SQLite DB on the
+ * first query of each cold start. ensureDbReady is a singleton promise so
+ * this is effectively free after the first call.
+ *
+ * Locally we skip the extension — the dev DB is migrated/seeded out of band
+ * via `prisma migrate dev` + `npm run prisma:seed`, and we don't want every
+ * dev query to pay the (already cached) bootstrap check.
+ */
+const isServerlessRuntime = !!(process.env.VERCEL || process.env.LAMBDA_TASK_ROOT);
+
+export const prisma = isServerlessRuntime
+  ? rawPrisma.$extends({
+      query: {
+        $allModels: {
+          async $allOperations({ args, query }) {
+            // Lazy import to avoid a circular dep at module init.
+            const { ensureDbReady } = await import("./db-bootstrap");
+            await ensureDbReady(rawPrisma);
+            return query(args);
+          },
+        },
+      },
+    })
+  : rawPrisma;

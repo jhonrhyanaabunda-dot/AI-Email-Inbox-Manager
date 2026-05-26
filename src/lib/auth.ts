@@ -56,6 +56,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(creds?.email ?? "").trim().toLowerCase();
         if (!email) return null;
         try {
+          // db.ts wraps prisma with an extension that auto-bootstraps the DB
+          // (migrate + seed) on the first query of each cold start.
           const user = await prisma.user.findUnique({ where: { email } });
           return user ? { id: user.id, email: user.email, name: user.name ?? undefined } : null;
         } catch (err) {

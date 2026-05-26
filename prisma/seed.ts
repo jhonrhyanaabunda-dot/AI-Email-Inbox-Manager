@@ -2,16 +2,20 @@
  * Demo seed — A3 Brands workspace with realistic dealership-leadership inbox.
  * 30 threads across 7 days, varied categories, 5 escalations, 8 AI drafts,
  * 7 daily briefings. Picked to look defensible in a sales demo.
+ *
+ * Two entry points:
+ *   - CLI:        `npm run prisma:seed` (creates its own PrismaClient, exits)
+ *   - Programmatic: `await seedDemoDatabase(prismaClient)` from app code,
+ *                   used to bootstrap an empty DB at Vercel cold start.
  */
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
 const J = (v: unknown) => JSON.stringify(v);
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const ago = (ms: number) => new Date(Date.now() - ms);
 
-async function main() {
+export async function seedDemoDatabase(prisma: PrismaClient) {
   console.log("Seeding A3 Brands demo workspace…");
 
   // Wipe (idempotent re-seed)
@@ -1089,11 +1093,16 @@ async function main() {
   console.log(`  Sign in: principal@a3brands.test  (or gm@a3brands.test, marketing@a3brands.test)`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// CLI entry point (npm run prisma:seed). Skipped when the module is imported
+// programmatically by db-bootstrap.ts at runtime.
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedDemoDatabase(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}
