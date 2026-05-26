@@ -1,13 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Star, Sparkles, Clock, Tag, FileEdit, AlertTriangle, MessageSquare,
-  Inbox as InboxIcon, CheckCircle2, Archive as ArchiveIcon,
+  Inbox as InboxIcon, CheckCircle2, Archive as ArchiveIcon, X,
 } from "lucide-react";
 import { cn, relativeTime, truncate } from "@/lib/utils";
 import { PriorityBadge, CategoryBadge } from "./priority-badge";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 export interface ThreadRow {
   id: string;
@@ -57,7 +59,12 @@ const EMPTY_STATES: Record<View, { icon: typeof InboxIcon; title: string; body: 
 
 export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; view?: View }) {
   const params = useParams<{ threadId?: string }>();
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkPending, setBulkPending] = useState(false);
+
   useEffect(() => {
     const html = document.documentElement;
     const sync = () => setQuery((html.dataset.search ?? "").trim().toLowerCase());
@@ -66,6 +73,47 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
     obs.observe(html, { attributes: true, attributeFilter: ["data-search"] });
     return () => obs.disconnect();
   }, []);
+
+  // Clear selection when the view (tab) changes — selections shouldn't
+  // carry across Inbox→Snoozed etc.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [view]);
+
+  function toggle(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function bulk(action: "archive_ids" | "done_ids" | "snooze_ids") {
+    if (selected.size === 0 || bulkPending) return;
+    setBulkPending(true);
+    try {
+      const body: any = { action, ids: Array.from(selected) };
+      if (action === "snooze_ids") {
+        body.until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      }
+      const res = await fetch("/api/threads/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`bulk ${action} failed (${res.status})`);
+      const n = selected.size;
+      const verb = action === "archive_ids" ? "archived" : action === "done_ids" ? "marked done" : "snoozed";
+      toast.success(`${n} thread${n === 1 ? "" : "s"} ${verb}`);
+      setSelected(new Set());
+      startTransition(() => router.refresh());
+    } catch (err) {
+      toast.error(`Bulk action failed: ${(err as Error).message}`);
+    } finally {
+      setBulkPending(false);
+    }
+  }
 
   const filtered = query
     ? threads.filter((t) => {
@@ -118,6 +166,57 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
 
   return (
     <>
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-primary/40 bg-primary/[0.06] px-3 py-2 backdrop-blur">
+          <span className="rounded-sm bg-primary px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary-foreground">
+            {selected.size}
+          </span>
+          <span className="text-[12px] font-medium text-foreground">
+            selected
+          </span>
+          <div className="ml-auto flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-[11px]"
+              disabled={bulkPending}
+              onClick={() => bulk("snooze_ids")}
+            >
+              <Clock className="mr-1 h-3 w-3" />
+              Snooze
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-[11px]"
+              disabled={bulkPending}
+              onClick={() => bulk("done_ids")}
+            >
+              <CheckCircle2 className="mr-1 h-3 w-3" />
+              Done
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-[11px]"
+              disabled={bulkPending}
+              onClick={() => bulk("archive_ids")}
+            >
+              <ArchiveIcon className="mr-1 h-3 w-3" />
+              Archive
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-1.5 text-muted-foreground"
+              onClick={() => setSelected(new Set())}
+              aria-label="Clear selection"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
       {query && (
         <div className="border-b border-border bg-secondary px-4 py-2 text-[11px] text-muted-foreground">
           {filtered.length} of {threads.length} threads matching &ldquo;
@@ -135,15 +234,38 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
               const fromName = pickFromName(t.participants);
               const active = params?.threadId === t.id;
               const labels = t.labels ?? [];
+              const isSelected = selected.has(t.id);
               return (
-                <li key={t.id} className="relative">
-                  {active && <span className="absolute left-0 top-0 h-full w-[3px] bg-primary" />}
+                <li key={t.id} className="group relative">
+                  {active && <span className="absolute left-0 top-0 z-10 h-full w-[3px] bg-primary" />}
+                  {/* Checkbox — always visible on selected rows, on hover otherwise. Stops click propagation so it doesn't navigate. */}
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    aria-label={isSelected ? "Deselect thread" : "Select thread"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggle(t.id);
+                    }}
+                    className={cn(
+                      "absolute left-2 top-4 z-10 grid h-4 w-4 place-items-center rounded-sm border transition-opacity",
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground opacity-100"
+                        : "border-border bg-card opacity-0 hover:border-primary group-hover:opacity-100",
+                      selected.size > 0 && "opacity-100",
+                    )}
+                  >
+                    {isSelected && <CheckCircle2 className="h-3 w-3" />}
+                  </button>
                   <Link
                     href={`/inbox/${t.id}`}
                     className={cn(
-                      "block px-5 py-4 transition-colors hover:bg-secondary",
+                      "block pl-9 pr-5 py-4 transition-colors hover:bg-secondary",
                       active && "bg-secondary",
-                      !t.isRead && !active && "bg-primary/[0.03]",
+                      isSelected && "bg-primary/[0.06]",
+                      !t.isRead && !active && !isSelected && "bg-primary/[0.03]",
                     )}
                   >
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">

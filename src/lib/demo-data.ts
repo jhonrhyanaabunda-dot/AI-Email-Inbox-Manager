@@ -416,23 +416,34 @@ export const DEMO_DRAFTS = DEMO_THREADS.filter((t) => t._seed.hasDraft).map((t, 
   updatedAt: ago(t._seed.hoursAgo * HOUR - 5 * 60 * 1000),
 }));
 
-export const DEMO_ESCALATIONS = DEMO_THREADS.filter((t) => t._seed.hasEscalation).map((t, i) => ({
-  id: `esc-${i + 1}`,
-  organizationId: "demo-org",
-  threadId: t.id,
-  thread: { id: t.id, subject: t.subject, priority: t.priority, category: t.category },
-  kind: t._seed.escalationKind ?? "LEGAL_THREAT",
-  severity: t._seed.priority === "CRITICAL" ? "CRITICAL" : "HIGH",
-  status: i === 0 ? "OPEN" : "ACKNOWLEDGED",
-  riskScore: t._seed.priority === "CRITICAL" ? 0.94 : 0.78,
-  summary: t._seed.aiSummary,
-  reason: t._seed.aiSummary,
-  notifiedAt: ago(t._seed.hoursAgo * HOUR),
-  acknowledgedAt: i === 0 ? null : ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
-  resolvedAt: null,
-  createdAt: ago(t._seed.hoursAgo * HOUR),
-  updatedAt: ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
-}));
+export const DEMO_ESCALATIONS = DEMO_THREADS.filter((t) => t._seed.hasEscalation).map((t, i) => {
+  // Owner derived from the thread's assignee where present, so the
+  // escalation card and the inbox row stay consistent.
+  const ownerId = t._seed.assignedTo ?? null;
+  const owner = ownerId ? DEMO_USERS.find((u) => u.id === ownerId) ?? null : null;
+  return {
+    id: `esc-${i + 1}`,
+    organizationId: "demo-org",
+    threadId: t.id,
+    thread: { id: t.id, subject: t.subject, priority: t.priority, category: t.category },
+    assigneeId: owner?.id ?? null,
+    assignee: owner ? { id: owner.id, name: owner.name, email: owner.email } : null,
+    kind: t._seed.escalationKind ?? "LEGAL_THREAT",
+    severity: t._seed.priority === "CRITICAL" ? "CRITICAL" : "HIGH",
+    status: i === 0 ? "OPEN" : "ACKNOWLEDGED",
+    riskScore: t._seed.priority === "CRITICAL" ? 0.94 : 0.78,
+    summary: t._seed.aiSummary,
+    reason: t._seed.aiSummary,
+    notifiedAt: ago(t._seed.hoursAgo * HOUR),
+    acknowledgedAt: i === 0 ? null : ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
+    acknowledgedBy: null,
+    resolvedAt: null,
+    resolvedBy: null,
+    resolutionNotes: null,
+    createdAt: ago(t._seed.hoursAgo * HOUR),
+    updatedAt: ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
+  };
+});
 
 /**
  * One briefing per day for the past 7 days. The "for today" briefing (i=0)

@@ -2,10 +2,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Shield, CheckCircle2, Clock, ChevronRight } from "lucide-react";
+import { AlertTriangle, Shield, CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { relativeTime } from "@/lib/utils";
+import { EscalationCard } from "@/components/escalations/escalation-card";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,10 @@ export default async function EscalationsPage({
     where: { organizationId: session.user.organizationId },
     orderBy: [{ status: "asc" }, { riskScore: "desc" }, { createdAt: "desc" }],
     take: 100,
-    include: { thread: { select: { id: true, subject: true, priority: true, category: true } } },
+    include: {
+      thread: { select: { id: true, subject: true, priority: true, category: true } },
+      assignee: { select: { id: true, name: true, email: true } },
+    },
   });
 
   const counts = {
@@ -171,83 +174,8 @@ function FilterChip({ href, label, active }: { href: string; label: string; acti
   );
 }
 
-function EscalationCard({ e }: { e: any }) {
-  const risk = typeof e.riskScore === "number" ? e.riskScore : 0;
-  const riskPct = Math.round(risk * 100);
-  const ageHours = (Date.now() - new Date(e.createdAt).getTime()) / 3_600_000;
-  const isUrgent = e.status === "OPEN" && ageHours < 12;
-  const isStale = (e.status === "OPEN" || e.status === "ACKNOWLEDGED") && ageHours > 48;
-
-  return (
-    <Link href={`/inbox/${e.thread?.id}`} className="block">
-      <Card className="transition-all hover:border-primary/40 hover:shadow-subtle">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-4">
-            <div className="flex-1 space-y-2">
-              <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                <Badge variant={e.severity === "CRITICAL" ? "critical" : "secondary"}>
-                  {e.severity?.toLowerCase() ?? "high"}
-                </Badge>
-                <span className="a3-label font-semibold text-foreground">
-                  {prettyKind(e.kind)}
-                </span>
-                {isUrgent && (
-                  <span className="inline-flex items-center gap-1 rounded-sm bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400">
-                    <Clock className="h-2.5 w-2.5" /> Fresh
-                  </span>
-                )}
-                {isStale && (
-                  <span className="inline-flex items-center gap-1 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                    <Clock className="h-2.5 w-2.5" /> Sitting {Math.round(ageHours)}h
-                  </span>
-                )}
-                <span className="ml-auto whitespace-nowrap font-mono text-[10px] uppercase tracking-wider text-a3-fog">
-                  {relativeTime(e.createdAt)}
-                </span>
-              </div>
-              <div className="text-[15px] font-bold leading-snug text-foreground">
-                {e.thread?.subject ?? "(no subject)"}
-              </div>
-              <p className="line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">
-                {e.summary ?? e.reason ?? "—"}
-              </p>
-
-              {/* Risk score bar */}
-              <div className="flex items-center gap-3 pt-1">
-                <div className="flex-1">
-                  <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider">
-                    <span className="text-a3-fog">Risk score</span>
-                    <span className={`font-mono font-bold ${riskBarTone(risk)}`}>{riskPct}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className={`h-full transition-all ${riskBarBg(risk)}`}
-                      style={{ width: `${Math.max(2, riskPct)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
-
 function prettyKind(k: string | undefined | null): string {
   if (!k) return "Escalation";
   return k.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function riskBarTone(r: number): string {
-  if (r >= 0.85) return "text-red-600 dark:text-red-400";
-  if (r >= 0.6) return "text-amber-600 dark:text-amber-400";
-  return "text-primary";
-}
-function riskBarBg(r: number): string {
-  if (r >= 0.85) return "bg-red-500";
-  if (r >= 0.6) return "bg-amber-500";
-  return "bg-primary";
-}

@@ -12,7 +12,7 @@ const VALID: InboxView[] = ["INBOX", "SNOOZED", "DONE", "ARCHIVED"];
 export default async function InboxIndex({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; priority?: string; category?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -20,13 +20,17 @@ export default async function InboxIndex({
   const params = await searchParams;
   const view: InboxView = VALID.includes(params.view as InboxView) ? (params.view as InboxView) : "INBOX";
   const orgWhere = { organizationId: session.user.organizationId };
+  // Optional filter params from the InboxTabs filter dropdowns.
+  const filterWhere: Record<string, any> = {};
+  if (params.priority) filterWhere.priority = params.priority;
+  if (params.category) filterWhere.category = params.category;
 
   const [counts, threads, archivableCount] = await Promise.all([
     Promise.all(VALID.map((v) => prisma.emailThread.count({ where: { ...orgWhere, status: v } }))).then((arr) =>
       Object.fromEntries(VALID.map((v, i) => [v, arr[i]])) as Record<InboxView, number>
     ),
     prisma.emailThread.findMany({
-      where: { ...orgWhere, status: view },
+      where: { ...orgWhere, ...filterWhere, status: view },
       orderBy: [{ priorityScore: "desc" }, { lastMessageAt: "desc" }],
       take: 50,
       select: {

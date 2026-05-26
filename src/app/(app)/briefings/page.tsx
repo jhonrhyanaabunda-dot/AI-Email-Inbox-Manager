@@ -21,13 +21,25 @@ export default async function BriefingsPage() {
 
   const [today, ...prior] = briefings as any[];
 
-  // Week-over-week metrics — sum of last 7 briefings vs prior 7.
-  const last7 = briefings.slice(0, 7) as any[];
-  const totalThreads = last7.reduce((a, b) => a + (b.threadsTriaged ?? 0), 0);
-  const totalDrafts = last7.reduce((a, b) => a + (b.pendingDrafts ?? 0), 0);
-  const totalEsc = last7.reduce((a, b) => a + (b.openEscalations ?? 0), 0);
-  const avgReplyRate =
-    last7.length > 0 ? last7.reduce((a, b) => a + (b.aiReplyRate ?? 0), 0) / last7.length : 0;
+  // Week-over-week: last 7 vs prior 7 briefings.
+  const last7 = (briefings as any[]).slice(0, 7);
+  const prev7 = (briefings as any[]).slice(7, 14);
+  const sum = (arr: any[], key: string) => arr.reduce((a, b) => a + (b[key] ?? 0), 0);
+  const avg = (arr: any[], key: string) =>
+    arr.length > 0 ? arr.reduce((a, b) => a + (b[key] ?? 0), 0) / arr.length : 0;
+
+  const totalThreads = sum(last7, "threadsTriaged");
+  const totalDrafts = sum(last7, "pendingDrafts");
+  const totalEsc = sum(last7, "openEscalations");
+  const avgReplyRate = avg(last7, "aiReplyRate");
+
+  const deltaThreads = totalThreads - sum(prev7, "threadsTriaged");
+  const deltaDrafts = totalDrafts - sum(prev7, "pendingDrafts");
+  const deltaEsc = totalEsc - sum(prev7, "openEscalations");
+  const deltaReply = avgReplyRate - avg(prev7, "aiReplyRate");
+
+  // Sparkline data: thread volume across last 7 days, oldest first.
+  const sparkData = last7.map((b: any) => b.threadsTriaged ?? 0).reverse();
 
   return (
     <div className="h-full overflow-y-auto bg-background">
@@ -63,13 +75,30 @@ export default async function BriefingsPage() {
           <>
             {/* Week-over-week metrics row */}
             <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Metric icon={Mail} label="Threads this week" value={totalThreads} />
-              <Metric icon={FileEdit} label="Drafts shipped" value={totalDrafts} />
-              <Metric icon={AlertTriangle} label="Escalations" value={totalEsc} tone="text-red-600 dark:text-red-400" />
+              <Metric
+                icon={Mail}
+                label="Threads this week"
+                value={totalThreads}
+                delta={deltaThreads}
+                deltaIsGood={(d) => d >= 0}
+                sparkData={sparkData}
+              />
+              <Metric icon={FileEdit} label="Drafts shipped" value={totalDrafts} delta={deltaDrafts} deltaIsGood={(d) => d >= 0} />
+              <Metric
+                icon={AlertTriangle}
+                label="Escalations"
+                value={totalEsc}
+                delta={deltaEsc}
+                deltaIsGood={(d) => d <= 0}
+                tone="text-red-600 dark:text-red-400"
+              />
               <Metric
                 icon={TrendingUp}
                 label="AI reply rate"
                 value={`${Math.round(avgReplyRate * 100)}%`}
+                delta={Math.round(deltaReply * 100)}
+                deltaSuffix="pp"
+                deltaIsGood={(d) => d >= 0}
                 tone="text-emerald-600 dark:text-emerald-400"
               />
             </div>
@@ -98,12 +127,22 @@ function Metric({
   label,
   value,
   tone,
+  delta,
+  deltaSuffix,
+  deltaIsGood,
+  sparkData,
 }: {
   icon: typeof Mail;
   label: string;
   value: string | number;
   tone?: string;
+  delta?: number;
+  deltaSuffix?: string;
+  deltaIsGood?: (d: number) => boolean;
+  sparkData?: number[];
 }) {
+  const hasDelta = typeof delta === "number" && delta !== 0;
+  const good = hasDelta && deltaIsGood ? deltaIsGood(delta) : delta! >= 0;
   return (
     <Card>
       <CardContent className="p-4">
@@ -111,11 +150,48 @@ function Metric({
           <Icon className={`h-3.5 w-3.5 ${tone ?? "text-primary"}`} />
           <span className="a3-label text-a3-fog">{label}</span>
         </div>
-        <div className={`mt-1 text-[24px] font-extrabold tracking-tight md:text-[28px] ${tone ?? "text-foreground"}`}>
-          {value}
+        <div className="mt-1 flex items-baseline justify-between gap-2">
+          <div className={`text-[24px] font-extrabold tracking-tight md:text-[28px] ${tone ?? "text-foreground"}`}>
+            {value}
+          </div>
+          {hasDelta && (
+            <span
+              className={`font-mono text-[11px] font-bold ${good ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+              title="vs. previous week"
+            >
+              {delta! > 0 ? "+" : ""}
+              {delta}
+              {deltaSuffix ?? ""}
+            </span>
+          )}
         </div>
+        {sparkData && sparkData.length > 1 && <Sparkline data={sparkData} className="mt-2" />}
       </CardContent>
     </Card>
+  );
+}
+
+function Sparkline({ data, className }: { data: number[]; className?: string }) {
+  const w = 100;
+  const h = 24;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = Math.max(max - min, 1);
+  const step = data.length > 1 ? w / (data.length - 1) : w;
+  const points = data
+    .map((v, i) => {
+      const x = i * step;
+      const y = h - ((v - min) / range) * (h - 2) - 1;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  // Area fill — extend down to baseline.
+  const areaPoints = `0,${h} ${points} ${w},${h}`;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className={`h-6 w-full ${className ?? ""}`} preserveAspectRatio="none">
+      <polygon points={areaPoints} className="fill-primary/15" />
+      <polyline points={points} className="fill-none stroke-primary" strokeWidth="1.25" />
+    </svg>
   );
 }
 
