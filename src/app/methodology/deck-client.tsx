@@ -1,11 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download, KeyboardIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Download,
+  KeyboardIcon,
+  ArrowLeft,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import type { Slide } from "./deck-data";
 import { exportDeckAsPPTX } from "./pptx";
-import { toast } from "sonner";
 
 export function DeckClient({ deck }: { deck: Slide[] }) {
   const [idx, setIdx] = useState(0);
@@ -21,11 +31,21 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
     [total],
   );
 
-  // Keyboard nav: ←/→ prev/next, Space next, Home/End jump, Esc exit fullscreen.
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    } else {
+      stageRef.current?.requestFullscreen?.();
+    }
+  }, []);
+
+  // Keyboard nav: ←/→ prev/next, Space next, Home/End jump, Esc exit fullscreen,
+  // F toggle fullscreen.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable))
+        return;
       switch (e.key) {
         case "ArrowRight":
         case " ":
@@ -58,7 +78,7 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [idx, total, go]);
+  }, [idx, total, go, toggleFullscreen]);
 
   // Sync state when the browser fullscreens / exits via Esc.
   useEffect(() => {
@@ -68,14 +88,6 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
     document.addEventListener("fullscreenchange", onChange);
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
-
-  function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.();
-    } else {
-      stageRef.current?.requestFullscreen?.();
-    }
-  }
 
   async function downloadPPTX() {
     if (exporting) return;
@@ -92,29 +104,41 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
   }
 
   return (
-    <>
-      {/* Inject the top-bar controls into the slot defined by page.tsx so the
-          page-level header keeps its layout. */}
-      <DeckControlsPortal>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 border-white/20 bg-transparent text-[12px] text-white hover:bg-white/10 hover:text-primary"
-          onClick={toggleFullscreen}
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-a3-navy text-white">
+      {/* Top chrome — single row, always visible (hidden only inside fullscreen via CSS). */}
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/10 bg-a3-navy px-4 md:px-6">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-[12px] text-white/65 hover:text-white"
         >
-          {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          {fullscreen ? "Exit" : "Present"}
-        </Button>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 text-[12px]"
-          onClick={downloadPPTX}
-          disabled={exporting}
-        >
-          <Download className="h-3.5 w-3.5" />
-          {exporting ? "Generating…" : "Download .pptx"}
-        </Button>
-      </DeckControlsPortal>
+          <ArrowLeft className="h-3.5 w-3.5" /> Back
+        </Link>
+        <Badge variant="status" className="hidden border-primary/60 bg-primary/15 text-primary md:inline-flex">
+          Methodology · Slide deck
+        </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 border-white/25 bg-transparent text-[12px] text-white hover:bg-white/10 hover:text-primary"
+            onClick={toggleFullscreen}
+            type="button"
+          >
+            {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{fullscreen ? "Exit" : "Present"}</span>
+          </Button>
+          <Button
+            size="sm"
+            className="h-9 gap-1.5 text-[12px]"
+            onClick={downloadPPTX}
+            disabled={exporting}
+            type="button"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exporting ? "Generating…" : "Download .pptx"}
+          </Button>
+        </div>
+      </header>
 
       {/* Slide stage. 16:9 frame centered in the viewport. */}
       <div
@@ -125,7 +149,11 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
       >
         <div
           className="relative aspect-video w-full max-w-[1400px] overflow-hidden rounded-lg border border-white/10 bg-a3-navy shadow-2xl"
-          style={fullscreen ? { borderRadius: 0, border: "none", maxWidth: "100vw", maxHeight: "100vh" } : undefined}
+          style={
+            fullscreen
+              ? { borderRadius: 0, border: "none", maxWidth: "100vw", maxHeight: "100vh" }
+              : undefined
+          }
         >
           {/* Soft emerald glow accents — show on every slide. */}
           <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-primary/20 blur-3xl" />
@@ -146,8 +174,7 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
           </div>
         </div>
 
-        {/* Arrow buttons — overlap the stage edges so they're reachable in both
-            normal + fullscreen view. */}
+        {/* Arrow buttons */}
         <button
           type="button"
           aria-label="Previous slide"
@@ -170,12 +197,12 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
 
       {/* Bottom filmstrip — quick jump. Hidden in fullscreen. */}
       {!fullscreen && (
-        <footer className="flex shrink-0 items-center gap-2 border-t border-white/10 bg-a3-navy/95 px-4 py-2 md:px-6">
-          <div className="flex items-center gap-1 text-[10px] text-white/40">
+        <footer className="flex shrink-0 items-center gap-2 border-t border-white/10 bg-a3-navy px-4 py-2 md:px-6">
+          <div className="hidden items-center gap-1 text-[10px] text-white/40 md:flex">
             <KeyboardIcon className="h-3 w-3" />
             <span className="uppercase tracking-wider">←→ / Space · F fullscreen</span>
           </div>
-          <div className="ml-auto flex flex-1 items-center gap-1 overflow-x-auto pl-4 scrollbar-thin">
+          <div className="flex flex-1 items-center gap-1 overflow-x-auto pl-1 scrollbar-thin md:pl-4">
             {deck.map((s, i) => (
               <button
                 key={i}
@@ -191,38 +218,13 @@ export function DeckClient({ deck }: { deck: Slide[] }) {
           </div>
         </footer>
       )}
-    </>
+    </div>
   );
 }
-
-/* ─── Helpers + slide renderers ────────────────────────────────────────── */
 
 function slideLabel(s: Slide): string {
   if ("title" in s) return s.title;
   return s.kind;
-}
-
-function DeckControlsPortal({ children }: { children: React.ReactNode }) {
-  const [target, setTarget] = useState<Element | null>(null);
-  useEffect(() => {
-    setTarget(document.getElementById("deck-controls"));
-  }, []);
-  if (!target) return null;
-  // Portal-without-portal: just render into the placeholder via append-only DOM.
-  // React 19 supports rendering directly via Portal but we don't want to pull
-  // react-dom client APIs; instead we let the parent flex-row carry it.
-  return <PortalFallback target={target}>{children}</PortalFallback>;
-}
-
-function PortalFallback({ target, children }: { target: Element; children: React.ReactNode }) {
-  // Lightweight portal using createPortal — imported lazily to keep this file
-  // free of react-dom imports at module scope.
-  const [createPortal, setCreatePortal] = useState<null | ((c: React.ReactNode, t: Element) => any)>(null);
-  useEffect(() => {
-    import("react-dom").then((m) => setCreatePortal(() => m.createPortal));
-  }, []);
-  if (!createPortal) return null;
-  return createPortal(children, target);
 }
 
 function SlideContent({ slide }: { slide: Slide }) {
@@ -233,7 +235,12 @@ function SlideContent({ slide }: { slide: Slide }) {
           <div className="a3-label mb-4 text-primary">{slide.eyebrow}</div>
           <h1
             className="text-white"
-            style={{ fontSize: "clamp(48px, 7vw, 84px)", lineHeight: 1.02, letterSpacing: "0.005em", fontWeight: 800 }}
+            style={{
+              fontSize: "clamp(48px, 7vw, 84px)",
+              lineHeight: 1.02,
+              letterSpacing: "0.005em",
+              fontWeight: 800,
+            }}
           >
             {slide.title}
           </h1>
@@ -247,14 +254,19 @@ function SlideContent({ slide }: { slide: Slide }) {
     case "agenda":
       return (
         <div className="relative z-10 flex h-full flex-col justify-center p-12 md:p-20">
-          <div className="a3-label mb-4 text-primary">{slide.eyebrow ?? "Agenda"}</div>
-          <h2 className="mb-10 text-white" style={{ fontSize: 48, fontWeight: 800, letterSpacing: "0.005em", lineHeight: 1.05 }}>
+          <div className="a3-label mb-4 text-primary">Agenda</div>
+          <h2
+            className="mb-10 text-white"
+            style={{ fontSize: 48, fontWeight: 800, letterSpacing: "0.005em", lineHeight: 1.05 }}
+          >
             {slide.title}
           </h2>
           <ol className="max-w-2xl space-y-3">
             {slide.items.map((item, i) => (
               <li key={i} className="flex items-baseline gap-4 text-[20px] text-white/90">
-                <span className="font-mono text-[14px] font-bold text-primary">{String(i + 1).padStart(2, "0")}</span>
+                <span className="font-mono text-[14px] font-bold text-primary">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
                 <span>{item}</span>
               </li>
             ))}
@@ -392,7 +404,10 @@ function SlideContent({ slide }: { slide: Slide }) {
                 )}
                 <div className="a3-label text-white/55">{t.name}</div>
                 <div className="mt-1 flex items-end gap-1">
-                  <span className="text-white" style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1 }}>
+                  <span
+                    className="text-white"
+                    style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.01em", lineHeight: 1 }}
+                  >
                     {t.price}
                   </span>
                   <span className="pb-0.5 text-[11px] text-white/55">{t.suffix}</span>
@@ -414,11 +429,18 @@ function SlideContent({ slide }: { slide: Slide }) {
           <div className="a3-label mb-4 text-primary">{slide.eyebrow}</div>
           <h2
             className="max-w-3xl text-white"
-            style={{ fontSize: "clamp(40px, 6vw, 64px)", lineHeight: 1.05, letterSpacing: "0.005em", fontWeight: 800 }}
+            style={{
+              fontSize: "clamp(40px, 6vw, 64px)",
+              lineHeight: 1.05,
+              letterSpacing: "0.005em",
+              fontWeight: 800,
+            }}
           >
             {slide.title}
           </h2>
-          <p className="mt-6 max-w-2xl text-[17px] leading-[26px] text-white/75 md:text-[18px]">{slide.subtitle}</p>
+          <p className="mt-6 max-w-2xl text-[17px] leading-[26px] text-white/75 md:text-[18px]">
+            {slide.subtitle}
+          </p>
           <ul className="mt-10 space-y-2 text-[13px] text-white/65">
             {slide.bullets.map((b) => (
               <li key={b}>· {b}</li>
