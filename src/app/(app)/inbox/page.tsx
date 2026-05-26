@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ThreadList } from "@/components/inbox/thread-list";
 import { InboxTabs, type InboxView } from "@/components/inbox/inbox-tabs";
 import { SmartArchiveBanner } from "@/components/inbox/smart-archive-banner";
+import { KeyboardHelp } from "@/components/inbox/keyboard-help";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,7 @@ export default async function InboxIndex({
 
   return (
     <div className="grid h-full md:grid-cols-[380px_1fr] lg:grid-cols-[400px_1fr]">
+      <KeyboardHelp />
       <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border">
         <InboxTabs counts={counts} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">

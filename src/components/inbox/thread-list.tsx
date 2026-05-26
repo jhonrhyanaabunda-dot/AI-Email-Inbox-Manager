@@ -64,6 +64,7 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -74,10 +75,11 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
     return () => obs.disconnect();
   }, []);
 
-  // Clear selection when the view (tab) changes — selections shouldn't
-  // carry across Inbox→Snoozed etc.
+  // Clear selection + focus when the view (tab) changes — selections
+  // shouldn't carry across Inbox→Snoozed etc.
   useEffect(() => {
     setSelected(new Set());
+    setFocusedId(null);
   }, [view]);
 
   function toggle(id: string) {
@@ -89,11 +91,12 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
     });
   }
 
-  async function bulk(action: "archive_ids" | "done_ids" | "snooze_ids") {
-    if (selected.size === 0 || bulkPending) return;
+  async function bulk(action: "archive_ids" | "done_ids" | "snooze_ids", ids?: string[]) {
+    const targetIds = ids ?? Array.from(selected);
+    if (targetIds.length === 0 || bulkPending) return;
     setBulkPending(true);
     try {
-      const body: any = { action, ids: Array.from(selected) };
+      const body: any = { action, ids: targetIds };
       if (action === "snooze_ids") {
         body.until = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       }
@@ -103,13 +106,13 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`bulk ${action} failed (${res.status})`);
-      const n = selected.size;
+      const n = targetIds.length;
       const verb = action === "archive_ids" ? "archived" : action === "done_ids" ? "marked done" : "snoozed";
       toast.success(`${n} thread${n === 1 ? "" : "s"} ${verb}`);
-      setSelected(new Set());
+      if (!ids) setSelected(new Set());
       startTransition(() => router.refresh());
     } catch (err) {
-      toast.error(`Bulk action failed: ${(err as Error).message}`);
+      toast.error(`Action failed: ${(err as Error).message}`);
     } finally {
       setBulkPending(false);
     }
@@ -130,6 +133,88 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
         return hay.includes(query);
       })
     : threads;
+
+  // Keyboard shortcuts: j/k navigate, Enter/e/s/d/x act on the focused thread,
+  // Esc clears selection. Ignored while typing in inputs.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (inField) return;
+      if (filtered.length === 0) return;
+
+      const idx = focusedId ? filtered.findIndex((t) => t.id === focusedId) : -1;
+
+      switch (e.key) {
+        case "j": {
+          e.preventDefault();
+          const next = filtered[Math.min(filtered.length - 1, idx + 1)] ?? filtered[0];
+          if (next) setFocusedId(next.id);
+          break;
+        }
+        case "k": {
+          e.preventDefault();
+          const prev = filtered[Math.max(0, idx - 1)] ?? filtered[0];
+          if (prev) setFocusedId(prev.id);
+          break;
+        }
+        case "Enter": {
+          if (focusedId) {
+            e.preventDefault();
+            router.push(`/inbox/${focusedId}`);
+          }
+          break;
+        }
+        case "e": {
+          if (focusedId) {
+            e.preventDefault();
+            bulk("archive_ids", [focusedId]);
+          }
+          break;
+        }
+        case "s": {
+          if (focusedId) {
+            e.preventDefault();
+            bulk("snooze_ids", [focusedId]);
+          }
+          break;
+        }
+        case "d": {
+          if (focusedId) {
+            e.preventDefault();
+            bulk("done_ids", [focusedId]);
+          }
+          break;
+        }
+        case "x": {
+          if (focusedId) {
+            e.preventDefault();
+            toggle(focusedId);
+          }
+          break;
+        }
+        case "Escape": {
+          if (selected.size > 0) {
+            e.preventDefault();
+            setSelected(new Set());
+          }
+          break;
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [filtered, focusedId, selected.size, router]);
+
+  // Scroll the focused row into view when it changes (e.g. j past the bottom).
+  useEffect(() => {
+    if (!focusedId) return;
+    const el = document.querySelector(`[data-thread-id="${focusedId}"]`);
+    if (el && "scrollIntoView" in el) {
+      (el as HTMLElement).scrollIntoView({ block: "nearest" });
+    }
+  }, [focusedId]);
 
   if (!filtered.length) {
     const empty = EMPTY_STATES[view];
@@ -166,6 +251,21 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
 
   return (
     <>
+      {selected.size === 0 && (
+        <div className="hidden items-center gap-1 border-b border-border bg-card/50 px-4 py-1 text-[10px] text-a3-fog md:flex">
+          <span>
+            Use <kbd className="mx-0.5 rounded-sm border border-border bg-secondary px-1 font-mono text-[10px] text-foreground">j</kbd>
+            <kbd className="mx-0.5 rounded-sm border border-border bg-secondary px-1 font-mono text-[10px] text-foreground">k</kbd>
+            to navigate ·
+            <kbd className="mx-0.5 rounded-sm border border-border bg-secondary px-1 font-mono text-[10px] text-foreground">e</kbd>
+            archive ·
+            <kbd className="mx-0.5 rounded-sm border border-border bg-secondary px-1 font-mono text-[10px] text-foreground">s</kbd>
+            snooze ·
+            <kbd className="mx-0.5 rounded-sm border border-border bg-secondary px-1 font-mono text-[10px] text-foreground">?</kbd>
+            for all shortcuts
+          </span>
+        </div>
+      )}
       {selected.size > 0 && (
         <div className="sticky top-0 z-20 flex items-center gap-2 border-b border-primary/40 bg-primary/[0.06] px-3 py-2 backdrop-blur">
           <span className="rounded-sm bg-primary px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary-foreground">
@@ -235,9 +335,13 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
               const active = params?.threadId === t.id;
               const labels = t.labels ?? [];
               const isSelected = selected.has(t.id);
+              const isFocused = focusedId === t.id;
               return (
-                <li key={t.id} className="group relative">
+                <li key={t.id} data-thread-id={t.id} className="group relative">
                   {active && <span className="absolute left-0 top-0 z-10 h-full w-[3px] bg-primary" />}
+                  {isFocused && !active && (
+                    <span className="absolute left-0 top-0 z-10 h-full w-[3px] bg-primary/50" />
+                  )}
                   {/* Checkbox — always visible on selected rows, on hover otherwise. Stops click propagation so it doesn't navigate. */}
                   <button
                     type="button"
@@ -261,11 +365,13 @@ export function ThreadList({ threads, view = "INBOX" }: { threads: ThreadRow[]; 
                   </button>
                   <Link
                     href={`/inbox/${t.id}`}
+                    onMouseEnter={() => setFocusedId(t.id)}
                     className={cn(
                       "block pl-9 pr-5 py-4 transition-colors hover:bg-secondary",
                       active && "bg-secondary",
                       isSelected && "bg-primary/[0.06]",
-                      !t.isRead && !active && !isSelected && "bg-primary/[0.03]",
+                      isFocused && !active && !isSelected && "bg-secondary/60 ring-1 ring-inset ring-primary/30",
+                      !t.isRead && !active && !isSelected && !isFocused && "bg-primary/[0.03]",
                     )}
                   >
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">

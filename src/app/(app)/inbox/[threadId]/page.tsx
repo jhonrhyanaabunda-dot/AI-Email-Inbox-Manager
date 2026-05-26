@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ThreadList } from "@/components/inbox/thread-list";
 import { ThreadView } from "@/components/inbox/thread-view";
 import { InboxTabs, type InboxView } from "@/components/inbox/inbox-tabs";
+import { KeyboardHelp } from "@/components/inbox/keyboard-help";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
 
   return (
     <div className="grid h-full md:grid-cols-[380px_1fr] lg:grid-cols-[400px_1fr]">
+      <KeyboardHelp />
       <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-border md:flex">
         <InboxTabs counts={counts} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">

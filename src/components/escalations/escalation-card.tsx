@@ -6,7 +6,16 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, ExternalLink, CheckCircle2, Shield, RotateCw, User } from "lucide-react";
+import {
+  Clock,
+  ExternalLink,
+  CheckCircle2,
+  Shield,
+  RotateCw,
+  User,
+  AlertCircle,
+  Activity,
+} from "lucide-react";
 import { relativeTime } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -21,8 +30,16 @@ type Escalation = {
   createdAt: string | Date;
   acknowledgedAt?: string | Date | null;
   resolvedAt?: string | Date | null;
+  resolutionNotes?: string | null;
   assignee?: { id: string; name: string | null; email: string | null } | null;
   thread?: { id?: string; subject?: string | null } | null;
+};
+
+type TimelineEvent = {
+  kind: "flagged" | "acknowledged" | "in_progress" | "resolved" | "dismissed";
+  at: Date;
+  by?: string;
+  note?: string | null;
 };
 
 const SLA_HOURS: Record<string, number> = {
@@ -135,6 +152,9 @@ export function EscalationCard({ e }: { e: Escalation }) {
           </div>
         </div>
 
+        {/* Activity timeline */}
+        <ActivityTimeline e={e} />
+
         {/* Inline actions */}
         <div className="flex flex-wrap gap-2 border-t border-border pt-3">
           {e.status === "OPEN" && (
@@ -170,6 +190,78 @@ export function EscalationCard({ e }: { e: Escalation }) {
     </Card>
   );
 }
+
+function ActivityTimeline({ e }: { e: Escalation }) {
+  const events: TimelineEvent[] = [];
+  events.push({ kind: "flagged", at: new Date(e.createdAt) });
+  if (e.acknowledgedAt) {
+    events.push({ kind: "acknowledged", at: new Date(e.acknowledgedAt), by: e.assignee?.name ?? undefined });
+  }
+  if (e.status === "IN_PROGRESS" && !e.resolvedAt) {
+    events.push({ kind: "in_progress", at: new Date(e.acknowledgedAt ?? e.createdAt), by: e.assignee?.name ?? undefined });
+  }
+  if (e.resolvedAt) {
+    events.push({
+      kind: e.status === "DISMISSED" ? "dismissed" : "resolved",
+      at: new Date(e.resolvedAt),
+      by: e.assignee?.name ?? undefined,
+      note: e.resolutionNotes ?? undefined,
+    });
+  }
+  events.sort((a, b) => +a.at - +b.at);
+
+  if (events.length <= 1) return null;
+
+  return (
+    <details className="group rounded-md border border-border bg-secondary/40">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[11px] font-medium text-muted-foreground hover:text-foreground">
+        <Activity className="h-3 w-3" />
+        <span>Activity</span>
+        <span className="ml-1 font-mono text-[10px] text-a3-fog">· {events.length} event{events.length === 1 ? "" : "s"}</span>
+      </summary>
+      <ol className="space-y-2.5 px-3 pb-3 pt-1">
+        {events.map((ev, i) => {
+          const meta = TIMELINE_META[ev.kind];
+          const Icon = meta.icon;
+          const isLast = i === events.length - 1;
+          return (
+            <li key={i} className="relative flex gap-3">
+              {!isLast && (
+                <span className="absolute left-[7px] top-[18px] h-[calc(100%+10px)] w-px bg-border" />
+              )}
+              <span className={`grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full ${meta.tone}`}>
+                <Icon className="h-2 w-2 stroke-[3]" />
+              </span>
+              <div className="flex-1 -mt-0.5">
+                <div className="text-[12px] font-medium text-foreground">
+                  {meta.label}
+                  {ev.by && (
+                    <span className="font-normal text-muted-foreground"> by {ev.by.split(" ")[0]}</span>
+                  )}
+                </div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-a3-fog">
+                  {relativeTime(ev.at)}
+                </div>
+                {ev.note && <div className="mt-1 text-[12px] italic text-muted-foreground">&ldquo;{ev.note}&rdquo;</div>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </details>
+  );
+}
+
+const TIMELINE_META: Record<
+  TimelineEvent["kind"],
+  { label: string; tone: string; icon: typeof AlertCircle }
+> = {
+  flagged: { label: "Flagged by AI", tone: "bg-red-500 text-white", icon: AlertCircle },
+  acknowledged: { label: "Acknowledged", tone: "bg-amber-500 text-white", icon: Shield },
+  in_progress: { label: "Marked in progress", tone: "bg-primary text-primary-foreground", icon: Clock },
+  resolved: { label: "Resolved", tone: "bg-emerald-500 text-white", icon: CheckCircle2 },
+  dismissed: { label: "Dismissed", tone: "bg-muted-foreground text-background", icon: CheckCircle2 },
+};
 
 function SlaChip({ remaining }: { remaining: number }) {
   // remaining is in hours; can be negative (overdue)
