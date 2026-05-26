@@ -120,3 +120,131 @@
     border-radius: 9999px;
   }
 }
+
+/* ─── Print styles for /methodology (Save-as-PDF) ───────────────────────── */
+@media print {
+  @page {
+    size: letter;
+    margin: 0.6in;
+  }
+
+  /* Hide all app chrome when printing the methodology doc. */
+  .methodology-doc .no-print,
+  .methodology-doc nav.no-print {
+    display: none !important;
+  }
+
+  /* Force light theme on print — readable on paper, ink-saving. */
+  .methodology-doc,
+  .methodology-doc * {
+    color: #111 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  .methodology-doc .text-primary {
+    color: #047857 !important; /* emerald-700 — prints clean */
+  }
+  .methodology-doc .border-primary,
+  .methodology-doc .border-border {
+    border-color: #d4d4d4 !important;
+  }
+
+  /* Cover page on its own. */
+  .methodology-doc .cover-page {
+    page-break-after: always;
+  }
+  .methodology-doc .page-break {
+    page-break-before: always;
+  }
+
+  /* Don't split pipeline-step or metric/tier cards across pages. */
+  .methodology-doc .no-print-break {
+    page-break-inside: avoid;
+  }
+
+  /* Tighter text + smaller hero on print. */
+  .methodology-doc h1 {
+    font-size: 36pt !important;
+  }
+  .methodology-doc h2 {
+    font-size: 18pt !important;
+  }
+  .methodology-doc h3 {
+    font-size: 13pt !important;
+  }
+  .methodology-doc h4 {
+    font-size: 11pt !important;
+  }
+  .methodology-doc p,
+  .methodology-doc li {
+    font-size: 10.5pt !important;
+    line-height: 1.45 !important;
+  }
+  .methodology-doc .a3-label {
+    font-size: 8pt !important;
+  }
+
+  /* Hide app-shell padding so the doc uses the full printable area. */
+  body,
+  html {
+    background: #fff !important;
+  }
+}
+
+/* ─── Methodology layout helpers (shared between screen + print) ───────── */
+.methodology-doc .prose ol.numbered {
+  list-style: none;
+  counter-reset: section-counter;
+  padding-left: 0;
+}
+.methodology-doc .prose ol.numbered > li {
+  counter-increment: section-counter;
+  padding-left: 2.5rem;
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+.methodology-doc .prose ol.numbered > li::before {
+  content: counter(section-counter, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 0.1em;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.75em;
+  font-weight: 700;
+  color: hsl(var(--primary));
+}
+.methodology-doc .prose ul.callouts {
+  list-style: none;
+  padding-left: 0;
+}
+.methodology-doc .prose ul.callouts > li {
+  position: relative;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.methodology-doc .prose ul.callouts > li::before {
+  content: "›";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: hsl(var(--primary));
+  font-weight: 700;
+}
+.methodology-doc .metrics-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.methodology-doc .pricing-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (min-width: 768px) {
+  .methodology-doc .metrics-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .methodology-doc .pricing-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

@@ -28,6 +28,7 @@ export default async function Landing() {
           <div className="ml-auto flex items-center gap-2 text-[14px]">
             <a href="#how" className="hidden px-3 text-foreground hover:text-primary md:inline">How it works</a>
             <a href="#flow" className="hidden px-3 text-foreground hover:text-primary md:inline">The flow</a>
+            <Link href="/methodology" className="hidden px-3 text-foreground hover:text-primary md:inline">Methodology</Link>
             <a href="#pricing" className="hidden px-3 text-foreground hover:text-primary md:inline">Pricing</a>
             <Button asChild size="sm" className="h-10 px-5">
               <Link href="/login">Sign in</Link>
@@ -247,9 +248,8 @@ export default async function Landing() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-14 border-white/25 px-8 text-white hover:bg-white/5 hover:text-primary">
-              <Link href="/login">
-                <Mail className="mr-2 h-4 w-4" />
-                Or sign in
+              <Link href="/methodology">
+                Read the methodology
               </Link>
             </Button>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Inbox, AlertTriangle, Calendar, Settings, BarChart3, Building2, X } from "lucide-react";
+import { Inbox, AlertTriangle, Calendar, Settings, BarChart3, Building2, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -91,8 +91,19 @@ export function Sidebar({
           </div>
         ) : null}
 
+        <Link
+          href="/methodology"
+          target="_blank"
+          rel="noopener"
+          className="mx-3 mb-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+        >
+          <FileText className="h-3.5 w-3.5 text-primary" />
+          <span className="flex-1">Methodology white paper</span>
+          <span className="font-mono text-[9px] uppercase tracking-wider text-a3-fog">PDF</span>
+        </Link>
+
         <div className="hidden border-t border-border px-4 py-3 text-[10px] uppercase tracking-[0.05em] text-a3-fog md:block">
-          ⌘K · Quick actions
+          Press <kbd className="rounded-sm border border-border bg-secondary px-1 font-mono text-[10px]">?</kbd> for shortcuts
         </div>
       </aside>
     </>
