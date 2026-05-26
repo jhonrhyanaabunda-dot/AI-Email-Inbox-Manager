@@ -113,8 +113,14 @@ function applySelect<T extends Row>(row: T, select: any): any {
   if (!select) return row;
   const out: Row = {};
   for (const [k, v] of Object.entries(select)) {
-    if (v === true) out[k] = row[k];
-    else if (v && typeof v === "object") out[k] = row[k]; // nested select — flatten
+    if (v === true) {
+      out[k] = row[k];
+    } else if (v && typeof v === "object") {
+      // Nested select on a relation. If the row has it, pass through; else
+      // return an empty array (assume it's a to-many relation — that's the
+      // common case in this codebase, and `.map()` on [] doesn't crash).
+      out[k] = row[k] !== undefined ? row[k] : [];
+    }
   }
   return out;
 }

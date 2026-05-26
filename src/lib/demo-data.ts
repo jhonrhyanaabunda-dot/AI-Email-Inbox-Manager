@@ -369,14 +369,21 @@ export const DEMO_THREADS = SEEDS.map((s, i) => ({
   actionItems: JSON.stringify(s.actionItems),
   status: s.status ?? "INBOX",
   isVip: s.isVip ?? false,
+  isVendor: s.category === "VENDOR" || s.category === "NEWSLETTER",
+  isRead: i > 5, // first 6 are unread (highest priority)
   isStarred: false,
   isSpam: false,
   isMuted: false,
   isPinned: false,
   externalId: `gmail-${i + 1}`,
   threadKey: `key-${i + 1}`,
+  participants: JSON.stringify([
+    { name: s.fromName, email: s.fromEmail, role: "from" },
+    { name: "Jordan Reyes", email: "principal@a3brands.test", role: "to" },
+  ]),
   participantCount: 2,
   emailCount: 1,
+  messageCount: 1,
   hasAttachment: false,
   firstMessageAt: ago(s.hoursAgo * HOUR),
   lastMessageAt: ago(s.hoursAgo * HOUR),
@@ -385,6 +392,7 @@ export const DEMO_THREADS = SEEDS.map((s, i) => ({
   completedAt: s.status === "DONE" ? ago(s.hoursAgo * HOUR) : null,
   createdAt: ago(s.hoursAgo * HOUR),
   updatedAt: ago(s.hoursAgo * HOUR),
+  labels: [] as Array<{ label: { id?: string; name: string } }>,
   _seed: s, // private — used by db.ts stub to derive related records
 }));
 
@@ -412,13 +420,16 @@ export const DEMO_ESCALATIONS = DEMO_THREADS.filter((t) => t._seed.hasEscalation
   id: `esc-${i + 1}`,
   organizationId: "demo-org",
   threadId: t.id,
+  thread: { id: t.id, subject: t.subject },
   kind: t._seed.escalationKind ?? "LEGAL_THREAT",
   severity: t._seed.priority === "CRITICAL" ? "CRITICAL" : "HIGH",
   status: i === 0 ? "OPEN" : "ACKNOWLEDGED",
+  riskScore: t._seed.priority === "CRITICAL" ? 0.94 : 0.78,
+  summary: t._seed.aiSummary,
+  reason: t._seed.aiSummary,
   notifiedAt: ago(t._seed.hoursAgo * HOUR),
   acknowledgedAt: i === 0 ? null : ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
   resolvedAt: null,
-  reason: t._seed.aiSummary,
   createdAt: ago(t._seed.hoursAgo * HOUR),
   updatedAt: ago(t._seed.hoursAgo * HOUR - 30 * 60 * 1000),
 }));
@@ -553,3 +564,40 @@ export const DEMO_WORKFLOWS = [
 ];
 
 export const DEMO_API_TOKENS: any[] = [];
+
+// ─── Attach to-many relations onto each thread row ─────────────────────────
+// The stub's `include` handling just reads pre-populated arrays off the row,
+// so we mutate each thread in place to glue on its emails / drafts /
+// escalations / assignments / comments. Cheap — single pass, demo-sized data.
+for (const t of DEMO_THREADS as any[]) {
+  t.emails = DEMO_EMAILS.filter((e) => e.threadId === t.id);
+  t.drafts = DEMO_DRAFTS.filter((d) => d.threadId === t.id);
+  t.escalations = DEMO_ESCALATIONS.filter((e) => e.threadId === t.id);
+  t.assignments = DEMO_ASSIGNMENTS.filter((a) => a.threadId === t.id).map((a) => ({
+    ...a,
+    user: DEMO_USERS.find((u) => u.id === a.userId) ?? null,
+  }));
+  t.comments = DEMO_COMMENTS.filter((c) => c.threadId === t.id).map((c) => ({
+    ...c,
+    user: DEMO_USERS.find((u) => u.id === c.userId) ?? null,
+  }));
+  // aiActionItems / followUpAt / toEmails / rationale / recommendedActions
+  // aren't on the original Prisma schema but the thread-detail page reads
+  // them — provide safe defaults so destructuring doesn't crash.
+  t.aiActionItems = JSON.parse(t.actionItems ?? "[]");
+  t.followUpAt = null;
+}
+for (const d of DEMO_DRAFTS as any[]) {
+  d.bodyText = d.body;
+  d.toEmails = JSON.stringify([
+    (DEMO_THREADS.find((t) => t.id === d.threadId) as any)?.fromEmail,
+  ]);
+  d.rationale = "Drafted in the GM's voice. Tone: professional, concise, action-oriented.";
+}
+for (const e of DEMO_ESCALATIONS as any[]) {
+  e.recommendedActions = JSON.stringify([
+    "Engage outside counsel",
+    "Do not respond directly to customer",
+    "Internal escalation to dealer principal",
+  ]);
+}
