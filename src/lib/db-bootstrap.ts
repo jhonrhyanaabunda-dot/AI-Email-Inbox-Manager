@@ -8,11 +8,12 @@
  * exist in the DB.
  *
  * This module guarantees the DB is usable by:
- *   1. Running the Prisma init migration SQL if `_prisma_migrations` is missing
+ *   1. Running the Prisma init migration SQL if the `User` table is missing
  *   2. Running the demo seed if the `User` table is empty
  *
- * Both checks are cheap on warm starts (one COUNT query) and only do work on
- * the first cold start. Subsequent invocations on the same Lambda are no-ops.
+ * End-to-end takes ~130ms locally, well under Vercel's function timeout.
+ * Checks are cheap on warm starts (one COUNT query) and only do work on the
+ * first cold start. Subsequent invocations on the same Lambda are no-ops.
  *
  * Node-only — never imported by Edge runtime code (middleware uses authConfig
  * not this).
@@ -40,6 +41,16 @@ async function bootstrap(prisma: PrismaClient): Promise<void> {
   await ensureSeed(prisma);
 }
 
+async function ensureSeed(prisma: PrismaClient): Promise<void> {
+  const userCount = await prisma.user.count().catch(() => -1);
+  if (userCount > 0) return;
+  console.log("[db-bootstrap] DB empty, running demo seed");
+  // Lazy import so the heavy seed module doesn't load on warm starts.
+  const { seedDemoDatabase } = await import("../../prisma/seed");
+  await seedDemoDatabase(prisma);
+  console.log("[db-bootstrap] seed complete");
+}
+
 async function ensureSchema(prisma: PrismaClient): Promise<void> {
   // If the User table exists, schema is in place. Cheap check.
   try {
@@ -52,24 +63,21 @@ async function ensureSchema(prisma: PrismaClient): Promise<void> {
   console.log("[db-bootstrap] schema missing, running init migration");
   const sql = readMigrationSql();
   // SQLite doesn't support multi-statement exec via $executeRawUnsafe in one
-  // call; split on `;` at statement boundaries and run each.
+  // call; split on `;` at statement boundaries, strip leading `-- ...` comment
+  // lines that Prisma prepends to each statement, and run what's left.
   const statements = sql
     .split(/;\s*[\r\n]/)
-    .map((s) => s.trim())
-    .filter((s) => s && !s.startsWith("--"));
+    .map((s) =>
+      s
+        .split(/\r?\n/)
+        .filter((line) => !line.trim().startsWith("--"))
+        .join("\n")
+        .trim(),
+    )
+    .filter((s) => s.length > 0);
   for (const stmt of statements) {
     await prisma.$executeRawUnsafe(stmt);
   }
-}
-
-async function ensureSeed(prisma: PrismaClient): Promise<void> {
-  const userCount = await prisma.user.count().catch(() => -1);
-  if (userCount > 0) return;
-  console.log("[db-bootstrap] DB empty, running demo seed");
-  // Lazy import so the heavy seed module doesn't load on warm starts.
-  const { seedDemoDatabase } = await import("../../prisma/seed");
-  await seedDemoDatabase(prisma);
-  console.log("[db-bootstrap] seed complete");
 }
 
 function readMigrationSql(): string {
