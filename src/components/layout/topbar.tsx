@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
-import { Moon, Sun, Search } from "lucide-react";
+import { Moon, Sun, Search, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -11,9 +11,11 @@ import { Badge } from "@/components/ui/badge";
 export function Topbar({
   user,
   demoMode,
+  onMenuClick,
 }: {
   user?: { name?: string | null; email?: string | null };
   demoMode: boolean;
+  onMenuClick?: () => void;
 }) {
   const { resolvedTheme, setTheme } = useTheme();
   const router = useRouter();
@@ -37,11 +39,20 @@ export function Topbar({
     .join("");
 
   return (
-    <header className="flex h-16 items-center gap-3 border-b border-border bg-background px-6">
+    <header className="flex h-16 items-center gap-2 border-b border-border bg-background px-4 md:gap-3 md:px-6">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onMenuClick}
+        aria-label="Open menu"
+        className="text-muted-foreground hover:text-primary md:hidden"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
       <form onSubmit={onSubmit} className="relative max-w-xl flex-1">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-a3-fog" />
         <Input
-          placeholder="Search threads, escalations, contacts…"
+          placeholder="Search threads…"
           className="h-10 pl-9"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

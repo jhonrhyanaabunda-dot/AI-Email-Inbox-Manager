@@ -66,8 +66,8 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
   }
 
   return (
-    <div className="grid h-full grid-cols-[400px_1fr]">
-      <aside className="flex flex-col overflow-hidden border-r border-border">
+    <div className="grid h-full md:grid-cols-[380px_1fr] lg:grid-cols-[400px_1fr]">
+      <aside className="hidden h-full min-h-0 flex-col overflow-hidden border-r border-border md:flex">
         <InboxTabs counts={counts} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <ThreadList

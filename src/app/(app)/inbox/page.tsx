@@ -54,8 +54,8 @@ export default async function InboxIndex({
   ]);
 
   return (
-    <div className="grid h-full grid-cols-[400px_1fr]">
-      <aside className="flex flex-col overflow-hidden border-r border-border">
+    <div className="grid h-full md:grid-cols-[380px_1fr] lg:grid-cols-[400px_1fr]">
+      <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border">
         <InboxTabs counts={counts} />
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           {view === "INBOX" && archivableCount > 0 && <SmartArchiveBanner count={archivableCount} />}
@@ -69,7 +69,7 @@ export default async function InboxIndex({
           />
         </div>
       </aside>
-      <section className="flex h-full flex-col items-center justify-center gap-8 p-10 text-center">
+      <section className="hidden h-full flex-col items-center justify-center gap-8 p-10 text-center md:flex">
         <div className="text-sm text-muted-foreground">Select a thread to view.</div>
         <div className="w-full max-w-xl rounded-lg border border-border bg-card p-6 text-left shadow-subtle">
           <div className="a3-label mb-3 text-primary">How A3 Inbox AI Works</div>

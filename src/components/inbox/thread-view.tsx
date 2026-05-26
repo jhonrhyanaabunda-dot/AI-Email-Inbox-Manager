@@ -103,11 +103,17 @@ export function ThreadView({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <header className="border-b border-border bg-card px-6 py-5">
+      <header className="border-b border-border bg-card px-4 py-4 md:px-6 md:py-5">
+        <a
+          href="/inbox"
+          className="mb-2 inline-flex items-center gap-1 text-[12px] text-muted-foreground hover:text-primary md:hidden"
+        >
+          ← Back to inbox
+        </a>
         <div className="flex items-start gap-3">
           <div className="flex-1">
             <div className="a3-label mb-1 text-a3-fog">Thread</div>
-            <h1 className="text-[22px] font-extrabold leading-snug tracking-tight text-foreground">
+            <h1 className="text-[18px] font-extrabold leading-snug tracking-tight text-foreground md:text-[22px]">
               {thread.subject || "(no subject)"}
             </h1>
             {thread.labels.length > 0 && (

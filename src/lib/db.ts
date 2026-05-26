@@ -18,6 +18,7 @@
  * for the demo.
  */
 
+import { readOverlay, writeThreadOverlay, applyOverlayToThread, type ThreadOverlay } from "./demo-overlay";
 import {
   DEMO_API_TOKENS,
   DEMO_ASSIGNMENTS,
@@ -125,12 +126,29 @@ function applySelect<T extends Row>(row: T, select: any): any {
   return out;
 }
 
-function applyInclude<T extends Row>(row: T, include: any, _model: string): any {
+// Known foreign-key relations: keyed by `<model>.<relationField>` → which
+// dataset to look up and which field on the row holds the foreign key.
+// Lets `include: { user: ... }` on a freshly-created ThreadComment resolve
+// to the actual User record instead of returning null.
+const FK_RELATIONS: Record<string, { fk: string; sourceList: () => Row[] }> = {
+  "ThreadComment.user": { fk: "userId", sourceList: () => DEMO_USERS as Row[] },
+  "ThreadAssignment.user": { fk: "userId", sourceList: () => DEMO_USERS as Row[] },
+  "Escalation.thread": { fk: "threadId", sourceList: () => DEMO_THREADS as Row[] },
+  "AiDraft.thread": { fk: "threadId", sourceList: () => DEMO_THREADS as Row[] },
+};
+
+function applyInclude<T extends Row>(row: T, include: any, model: string): any {
   if (!include) return row;
   const out: Row = { ...row };
-  // Generic include: leave keys empty arrays / nulls so destructuring doesn't crash.
-  for (const k of Object.keys(include)) {
-    if (out[k] === undefined) out[k] = Array.isArray(out[k]) ? [] : null;
+  for (const [k] of Object.entries(include)) {
+    if (out[k] !== undefined) continue; // already populated
+    const fk = FK_RELATIONS[`${model}.${k}`];
+    if (fk) {
+      const fkVal = out[fk.fk];
+      out[k] = fkVal ? fk.sourceList().find((r) => r.id === fkVal) ?? null : null;
+    } else {
+      out[k] = []; // assume to-many; empty list is safe to .map()
+    }
   }
   return out;
 }
@@ -232,13 +250,90 @@ function makeModel<T extends Row>(rows: T[], modelName: string) {
 
 /* ─── client ───────────────────────────────────────────────────────────── */
 
+/**
+ * Wrap the EmailThread model with a cookie-backed overlay so mutations
+ * (snooze, archive, mark-read, etc.) survive Vercel cold starts for the
+ * lifetime of the user's session. Other models are still ephemeral.
+ */
+function makeThreadModel() {
+  const base = makeModel(DEMO_THREADS as Row[], "EmailThread");
+  async function applyAll<T extends Row>(rows: T[]): Promise<T[]> {
+    const overlay = await readOverlay();
+    return rows.map((r) => applyOverlayToThread(r, overlay));
+  }
+  return {
+    ...base,
+    async findUnique(args: any) {
+      const row = await base.findUnique(args);
+      if (!row) return row;
+      const overlay = await readOverlay();
+      return applyOverlayToThread(row, overlay);
+    },
+    async findUniqueOrThrow(args: any) {
+      const row = await (this as any).findUnique(args);
+      if (!row) throw new Error(`[demo-db] EmailThread not found`);
+      return row;
+    },
+    async findFirst(args: any) {
+      const row = await base.findFirst(args);
+      if (!row) return row;
+      const overlay = await readOverlay();
+      return applyOverlayToThread(row, overlay);
+    },
+    async findMany(args: any) {
+      const rows = await base.findMany(args);
+      return applyAll(rows);
+    },
+    async count({ where }: any = {}) {
+      // Apply overlay BEFORE filtering, because the overlay can change
+      // `status` (the field the inbox tabs filter on).
+      const overlay = await readOverlay();
+      return (DEMO_THREADS as Row[])
+        .map((r) => applyOverlayToThread(r, overlay))
+        .filter((r) => matchesWhere(r, where)).length;
+    },
+    async update({ where, data, select, include }: any) {
+      const row = (DEMO_THREADS as Row[]).find((r) => matchesWhere(r, where));
+      if (!row) throw new Error(`[demo-db] EmailThread update: not found`);
+      Object.assign(row, data, { updatedAt: new Date() });
+      const overlayPatch = pickOverlay(data);
+      if (Object.keys(overlayPatch).length > 0) {
+        await writeThreadOverlay(row.id, overlayPatch);
+      }
+      return applySelect(applyInclude(row, include, "EmailThread"), select);
+    },
+    async updateMany({ where, data }: any) {
+      const matched = (DEMO_THREADS as Row[]).filter((r) => matchesWhere(r, where));
+      const now = new Date();
+      const overlayPatch = pickOverlay(data);
+      for (const r of matched) {
+        Object.assign(r, data, { updatedAt: now });
+        if (Object.keys(overlayPatch).length > 0) {
+          await writeThreadOverlay(r.id, overlayPatch);
+        }
+      }
+      return { count: matched.length };
+    },
+  };
+}
+
+function pickOverlay(data: any): ThreadOverlay {
+  const patch: ThreadOverlay = {};
+  if ("status" in data) patch.status = data.status;
+  if ("isRead" in data) patch.isRead = data.isRead;
+  if ("snoozedUntil" in data) patch.snoozedUntil = data.snoozedUntil;
+  if ("archivedAt" in data) patch.archivedAt = data.archivedAt;
+  if ("completedAt" in data) patch.completedAt = data.completedAt;
+  return patch;
+}
+
 export const prisma: any = {
   organization: makeModel([DEMO_ORG] as Row[], "Organization"),
   dealership: makeModel([DEMO_DEALERSHIP] as Row[], "Dealership"),
   user: makeModel(DEMO_USERS as Row[], "User"),
   membership: makeModel(DEMO_MEMBERSHIPS as Row[], "Membership"),
   mailbox: makeModel([DEMO_MAILBOX] as Row[], "Mailbox"),
-  emailThread: makeModel(DEMO_THREADS as Row[], "EmailThread"),
+  emailThread: makeThreadModel(),
   email: makeModel(DEMO_EMAILS as Row[], "Email"),
   aiDraft: makeModel(DEMO_DRAFTS as Row[], "AiDraft"),
   escalation: makeModel(DEMO_ESCALATIONS as Row[], "Escalation"),
