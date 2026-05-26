@@ -61,14 +61,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       return ok({ enqueued: true, demo: true });
     }
 
-    // Production path: enqueue real LangGraph orchestration
-    const { queues } = await import("@/lib/queue");
-    await queues.aiProcessThread.add(
-      "manual",
-      { threadId: id, reason: `manual:${session.userId}` },
-      { jobId: `ai:${id}:${Date.now()}` }
-    );
-    return ok({ enqueued: true });
+    // Demo mode — no AI processing queue. Demo branch above handles it inline.
+    return ok({ enqueued: true, demo: true });
   } catch (err) {
     return toErrorResponse(err);
   }

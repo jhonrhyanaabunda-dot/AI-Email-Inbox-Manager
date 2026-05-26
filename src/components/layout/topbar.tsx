@@ -48,8 +48,12 @@ export function Topbar({
         />
       </form>
       {demoMode && (
-        <Badge variant="status" title="Running on local SQLite seed data. OpenAI calls are simulated.">
-          DEMO
+        <Badge
+          variant="status"
+          className="border-primary/60 bg-primary/10 text-primary"
+          title="Sample dealership data. Mutations don't persist between cold starts."
+        >
+          DEMO MODE
         </Badge>
       )}
       <Button

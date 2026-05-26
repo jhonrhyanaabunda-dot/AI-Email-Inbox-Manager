@@ -1,13 +1,10 @@
 /**
- * Demo-mode detection + canned AI responses.
- * Auto-enabled when OPENAI_API_KEY is missing or set to the placeholder.
- *
- * This lets the demo click through end-to-end (Approve & Send, Run AI,
- * Generate Now) without requiring OpenAI + Redis to be live.
+ * The whole app runs in demo mode (no database, no OpenAI, no real OAuth),
+ * so this always returns true. Kept as a function so the call sites still
+ * read naturally and any future "is this a real install?" branches stay easy.
  */
 export function isDemoMode(): boolean {
-  const key = process.env.OPENAI_API_KEY ?? "";
-  return !key || key === "sk-PLACEHOLDER" || key.startsWith("sk-PLACEHOLDER");
+  return true;
 }
 
 const CANNED_SUMMARIES = [

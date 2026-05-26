@@ -102,14 +102,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return ok({ sent: true, demo: true });
       }
 
-      // Production path: queue the real send.
+      // Demo mode — no send queue, mark approved + treat as sent.
       await prisma.aiDraft.update({
         where: { id },
-        data: { status: "APPROVED", reviewedById: session.userId, reviewedAt: new Date(), reviewNotes: notes },
+        data: {
+          status: "SENT",
+          reviewedById: session.userId,
+          reviewedAt: new Date(),
+          sentAt: new Date(),
+          reviewNotes: notes,
+        },
       });
-      const { queues } = await import("@/lib/queue");
-      await queues.draftSend.add("send", { draftId: id, userId: session.userId }, { jobId: `send:${id}` });
-      return ok({ enqueued: true });
+      return ok({ sent: true, demo: true });
     }
     return fail(400, "Unknown action");
   } catch (err) {

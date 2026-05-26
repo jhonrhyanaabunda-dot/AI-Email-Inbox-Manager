@@ -63,9 +63,9 @@ export async function POST() {
       return ok({ generated: true, demo: true });
     }
 
-    const { queues } = await import("@/lib/queue");
-    await queues.aiDigest.add("manual", { userId: session.userId }, { jobId: `digest:${session.userId}:${Date.now()}` });
-    return ok({ enqueued: true });
+    // Demo mode — no digest queue. The demo branch above already wrote the
+    // briefing inline, so by here we're effectively always demoing.
+    return ok({ enqueued: true, demo: true });
   } catch (err) {
     return toErrorResponse(err);
   }

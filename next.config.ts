@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
   },
-  serverExternalPackages: ["bullmq", "ioredis", "googleapis"],
+  serverExternalPackages: [],
   // Worker code produces type errors that don't affect runtime. tsc runs in
   // dev via the editor; we don't gate Vercel builds on it.
   typescript: { ignoreBuildErrors: true },
